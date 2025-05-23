@@ -482,4 +482,27 @@ input[type="number"] {
     min-width: 60px;
     min-height: 60px;
     font-size: 2em;
+}
+
+.game-type-btns.vertical {
+    flex-direction: column;
+    gap: 18px;
+    align-items: stretch;
+}
+.game-type-btns.vertical .game-type-btn {
+    width: 100%;
+    min-width: 120px;
+    font-size: 1.2em;
+    padding: 16px 0;
+}
+
+#decompRandomGroup label {
+    font-size: 1.1em;
+    user-select: none;
+}
+#decompRandom {
+    width: 1.3em;
+    height: 1.3em;
+    vertical-align: middle;
+    margin-right: 6px;
 } 

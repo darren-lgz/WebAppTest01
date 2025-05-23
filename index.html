@@ -13,7 +13,7 @@
             <div id="setupSection">
                 <div class="setup-group">
                     <label>选择游戏：</label>
-                    <div id="gameTypeBtns" class="game-type-btns">
+                    <div id="gameTypeBtns" class="game-type-btns vertical">
                         <button type="button" class="game-type-btn active" data-type="quick-count">一眼识数</button>
                         <button type="button" class="game-type-btn" data-type="decomposition">数的分解</button>
                         <button type="button" class="game-type-btn" data-type="composition">数的组合</button>
@@ -22,11 +22,14 @@
                 </div>
                 <div class="setup-group">
                     <label for="minNumber">最小数：</label>
-                    <input type="number" id="minNumber" value="1" min="1" max="100">
+                    <input type="number" id="minNumber" value="2" min="2" max="100">
                 </div>
                 <div class="setup-group">
                     <label for="maxNumber">最大数：</label>
-                    <input type="number" id="maxNumber" value="20" min="1" max="100">
+                    <input type="number" id="maxNumber" value="5" min="2" max="100">
+                </div>
+                <div class="setup-group" id="decompRandomGroup" style="display:none;">
+                    <label for="decompRandom"><input type="checkbox" id="decompRandom" checked> 乱序（每题目标数字随机）</label>
                 </div>
                 <button id="startBtn">开始游戏</button>
             </div>

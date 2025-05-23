@@ -32,9 +32,9 @@ const GAME_CONFIG = {
 const audioCorrect = new Audio('sounds/correct.mp3');
 const audioWrong = new Audio('sounds/wrong.mp3');
 const audioDrag = new Audio('sounds/drag.mp3');
-function playCorrect() { audioCorrect.currentTime = 0; audioCorrect.play(); }
-function playWrong() { audioWrong.currentTime = 0; audioWrong.play(); }
-function playDrag() { audioDrag.currentTime = 0; audioDrag.play(); }
+function playCorrect() { try { audioCorrect.currentTime = 0; audioCorrect.play(); } catch(e){} }
+function playWrong() { try { audioWrong.currentTime = 0; audioWrong.play(); } catch(e){} }
+function playDrag() { try { audioDrag.currentTime = 0; audioDrag.play(); } catch(e){} }
 
 // 页面加载后只显示设置区
 function showSetupOnly() {
@@ -125,12 +125,128 @@ function getRandomNumber(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+// 解绑旧事件，防止重复绑定
+function unbindGlobalEvents() {
+    document.removeEventListener('dragover', dragOverHandler);
+    document.removeEventListener('dragleave', dragLeaveHandler);
+    document.removeEventListener('drop', dropHandler);
+    document.removeEventListener('touchstart', touchStartHandler);
+    document.removeEventListener('touchend', touchEndHandler);
+    document.removeEventListener('touchmove', touchMoveHandler);
+}
+function dragOverHandler(e) {
+    if (e.target.classList.contains('decomp-blank') || e.target.classList.contains('comp-blank')) {
+        e.preventDefault();
+        e.target.classList.add('dragover');
+    }
+}
+function dragLeaveHandler(e) {
+    if (e.target.classList.contains('decomp-blank') || e.target.classList.contains('comp-blank')) {
+        e.target.classList.remove('dragover');
+    }
+}
+function dropHandler(e) {
+    if (e.target.classList.contains('decomp-blank') || e.target.classList.contains('comp-blank')) {
+        e.target.classList.remove('dragover');
+    }
+}
+function touchStartHandler(e) {
+    const target = e.target;
+    if (target.classList.contains('number-option') && target.getAttribute('draggable') === 'true') {
+        target.classList.add('dragging');
+        window._touchDragNum = parseInt(target.textContent);
+        playDrag();
+        e.preventDefault();
+    }
+    // 触摸空格时填入数字
+    const blank = e.target.closest('.decomp-blank, .comp-blank');
+    if (blank && window._touchDragNum != null) {
+        if (blank.classList.contains('decomp-blank')) {
+            if (!window._decompFilled) {
+                blank.innerHTML = `<span class='filled'>${window._touchDragNum}</span>`;
+                window._decompFilled = true;
+                document.querySelectorAll('.decomp-options .number-option').forEach(opt => {
+                    if (parseInt(opt.textContent) === window._touchDragNum) opt.classList.add('used');
+                });
+                setTimeout(() => {
+                    if (window._decompKnown + window._touchDragNum === window._decompTarget) {
+                        playCorrect();
+                        totalScore++;
+                        questionCount++;
+                        document.getElementById('totalScore').textContent = totalScore;
+                        updateProgress();
+                        document.getElementById('feedback').textContent = '太棒了！答对了！';
+                        document.getElementById('feedback').className = 'feedback correct';
+                        setTimeout(renderQuestion, 800);
+                    } else {
+                        playWrong();
+                        document.getElementById('feedback').textContent = '再试一次吧！';
+                        document.getElementById('feedback').className = 'feedback incorrect';
+                        setTimeout(() => {
+                            blank.innerHTML = `<span class='placeholder'>?</span>`;
+                            window._decompFilled = false;
+                            document.querySelectorAll('.decomp-options .number-option').forEach(opt => opt.classList.remove('used'));
+                            document.getElementById('feedback').textContent = '';
+                            document.getElementById('feedback').className = 'feedback';
+                        }, 800);
+                    }
+                }, 300);
+            }
+        } else if (blank.classList.contains('comp-blank')) {
+            const idx = blank.id === 'compBlank1' ? 1 : 2;
+            blank.innerHTML = `<span class='filled'>${window._touchDragNum}</span>`;
+            window._compFilled[idx-1] = window._touchDragNum;
+            document.querySelectorAll('.comp-options .number-option').forEach(opt => {
+                if (parseInt(opt.textContent) === window._touchDragNum) opt.classList.add('used');
+            });
+            if (window._compFilled[0] !== null && window._compFilled[1] !== null) {
+                setTimeout(() => {
+                    const sum = window._compFilled[0] + window._compFilled[1];
+                    if (sum === window._compTarget) {
+                        playCorrect();
+                        totalScore++;
+                        questionCount++;
+                        document.getElementById('totalScore').textContent = totalScore;
+                        updateProgress();
+                        document.getElementById('feedback').textContent = '太棒了！答对了！';
+                        document.getElementById('feedback').className = 'feedback correct';
+                        setTimeout(renderQuestion, 800);
+                    } else {
+                        playWrong();
+                        document.getElementById('feedback').textContent = '再试一次吧！';
+                        document.getElementById('feedback').className = 'feedback incorrect';
+                        setTimeout(() => {
+                            document.getElementById('compBlank1').innerHTML = `<span class='placeholder'>?</span>`;
+                            document.getElementById('compBlank2').innerHTML = `<span class='placeholder'>?</span>`;
+                            window._compFilled = [null, null];
+                            document.querySelectorAll('.comp-options .number-option').forEach(opt => opt.classList.remove('used'));
+                            document.getElementById('feedback').textContent = '';
+                            document.getElementById('feedback').className = 'feedback';
+                        }, 800);
+                    }
+                }, 300);
+            }
+        }
+        window._touchDragNum = null;
+    }
+}
+function touchEndHandler(e) {
+    const dragging = document.querySelector('.number-option.dragging');
+    if (dragging) dragging.classList.remove('dragging');
+    window._touchDragNum = null;
+}
+function touchMoveHandler(e) {
+    // 可扩展为拖动跟随手指动画
+}
+
+// 渲染题目时先解绑事件再清空再渲染
 function renderQuestion() {
     if (questionCount >= maxQuestions) {
         clearInterval(timer);
         showResult();
         return;
     }
+    unbindGlobalEvents();
     let q;
     do {
         if (currentGameType === 'quick-count') q = genQuickCount();
@@ -139,12 +255,22 @@ function renderQuestion() {
         if (currentGameType === 'arithmetic') q = genArithmetic();
     } while (lastQuestion && JSON.stringify(q.data) === JSON.stringify(lastQuestion.data));
     lastQuestion = q;
-    document.getElementById('gameContent').innerHTML = q.html;
+    // 先清空再渲染
+    const gameContent = document.getElementById('gameContent');
+    gameContent.innerHTML = '';
+    gameContent.innerHTML = q.html;
     document.getElementById('feedback').textContent = '';
     addBackHomeBtn();
+    // 重新绑定全局事件
+    document.addEventListener('dragover', dragOverHandler);
+    document.addEventListener('dragleave', dragLeaveHandler);
+    document.addEventListener('drop', dropHandler);
+    document.addEventListener('touchstart', touchStartHandler, {passive: false});
+    document.addEventListener('touchend', touchEndHandler);
+    document.addEventListener('touchmove', touchMoveHandler);
 }
 
-// 首页按钮选择游戏类型
+// 首页按钮选择游戏类型，数的分解时显示乱序选项
 function setupGameTypeBtns() {
     const btns = document.querySelectorAll('.game-type-btn');
     btns.forEach(btn => {
@@ -152,6 +278,13 @@ function setupGameTypeBtns() {
             btns.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             currentGameType = this.getAttribute('data-type');
+            // 只在数的分解时显示乱序选项
+            const decompGroup = document.getElementById('decompRandomGroup');
+            if (currentGameType === 'decomposition') {
+                decompGroup.style.display = '';
+            } else {
+                decompGroup.style.display = 'none';
+            }
         };
     });
 }
@@ -216,29 +349,34 @@ window.checkQuickCount = function(selected, correct) {
 
 // 数的分解（拖拽版）
 function genDecomposition() {
-    const target = getRandomNumber(Math.max(minNumber+1, 5), maxNumber);
+    let target;
+    const decompRandom = document.getElementById('decompRandom')?.checked;
+    if (decompRandom) {
+        target = getRandomNumber(Math.max(minNumber+1, 5), maxNumber);
+    } else {
+        target = maxNumber;
+    }
     const knownNum = getRandomNumber(minNumber, target-1);
     const answer = target - knownNum;
     let options = new Set([answer]);
     while (options.size < 4) options.add(getRandomNumber(minNumber, target-1));
     options = Array.from(options).sort(() => Math.random() - 0.5);
-    let html = `<div class='triangle-layout' style='margin-bottom:30px;'>
-        <div class='target-number'>${target}</div>
-        <svg width='120' height='80' style='position:absolute;left:50%;top:60px;transform:translateX(-50%);z-index:0;'>
-            <line x1='60' y1='0' x2='20' y2='60' stroke='#4ecdc4' stroke-width='3'/>
-            <line x1='60' y1='0' x2='100' y2='60' stroke='#4ecdc4' stroke-width='3'/>
+    let html = `<div class='triangle-layout' style='margin-bottom:30px;position:relative;'>
+        <div class='target-number' style='z-index:2;position:relative;'>${target}</div>
+        <svg width='120' height='80' style='position:absolute;left:50%;top:60px;transform:translateX(-50%);z-index:1;pointer-events:none;'>
+            <line x1='60' y1='10' x2='20' y2='70' stroke='#4ecdc4' stroke-width='3'/>
+            <line x1='60' y1='10' x2='100' y2='70' stroke='#4ecdc4' stroke-width='3'/>
         </svg>
-        <div class='decomposition-inputs' style='position:relative;z-index:1;gap:60px;'>
+        <div class='decomposition-inputs' style='position:relative;z-index:2;gap:60px;margin-top:40px;'>
             <div class='known-number'>${knownNum}</div>
             <div class='decomp-blank' id='decompBlank' ondragover='event.preventDefault()' ondrop='dropDecomp(event,${answer})'>
-                <span class='placeholder'>?</span>
+                <span class='placeholder' style='font-size:inherit;'>?</span>
             </div>
         </div>
     </div>
     <div class='decomp-options' style='display:flex;justify-content:center;gap:20px;margin-top:30px;'>
         ${options.map(num => `<div class='number-option' draggable='true' ondragstart='dragDecomp(event,${num})'>${num}</div>`).join('')}
     </div>`;
-    // 记录当前正确答案
     window._decompAnswer = answer;
     window._decompKnown = knownNum;
     window._decompTarget = target;
@@ -254,7 +392,7 @@ window.dropDecomp = function(event, answer) {
     if (window._decompFilled) return;
     const num = parseInt(event.dataTransfer.getData('text/plain'));
     const blank = document.getElementById('decompBlank');
-    blank.innerHTML = `<span class='filled'>${num}</span>`;
+    blank.innerHTML = `<span class='filled' style='font-size:inherit;'>${num}</span>`;
     window._decompFilled = true;
     document.querySelectorAll('.decomp-options .number-option').forEach(opt => {
         if (parseInt(opt.textContent) === num) opt.classList.add('used');
@@ -271,35 +409,19 @@ window.dropDecomp = function(event, answer) {
             document.getElementById('feedback').className = 'feedback correct';
             setTimeout(renderQuestion, 800);
         } else {
-            playWrong();
+            playWrong(); // 答错音效立即播放
             document.getElementById('feedback').textContent = '再试一次吧！';
             document.getElementById('feedback').className = 'feedback incorrect';
             setTimeout(() => {
-                blank.innerHTML = `<span class='placeholder'>?</span>`;
+                blank.innerHTML = `<span class='placeholder' style='font-size:inherit;'>?</span>`;
                 window._decompFilled = false;
                 document.querySelectorAll('.decomp-options .number-option').forEach(opt => opt.classList.remove('used'));
                 document.getElementById('feedback').textContent = '';
                 document.getElementById('feedback').className = 'feedback';
             }, 800);
         }
-    }, 300);
+    }, 100); // 答错音效提前
 };
-document.addEventListener('dragover', function(e) {
-    if (e.target.classList.contains('decomp-blank') || e.target.classList.contains('comp-blank')) {
-        e.preventDefault();
-        e.target.classList.add('dragover');
-    }
-});
-document.addEventListener('dragleave', function(e) {
-    if (e.target.classList.contains('decomp-blank') || e.target.classList.contains('comp-blank')) {
-        e.target.classList.remove('dragover');
-    }
-});
-document.addEventListener('drop', function(e) {
-    if (e.target.classList.contains('decomp-blank') || e.target.classList.contains('comp-blank')) {
-        e.target.classList.remove('dragover');
-    }
-});
 
 // 数的组合（拖拽版）
 function genComposition() {
@@ -374,98 +496,6 @@ window.dropComp = function(event, idx) {
         }, 300);
     }
 };
-
-// 移动端适配：touch拖拽（简化实现，点击数字填入空格）
-document.addEventListener('touchstart', function(e) {
-    const target = e.target;
-    if (target.classList.contains('number-option') && target.getAttribute('draggable') === 'true') {
-        target.classList.add('dragging');
-        window._touchDragNum = parseInt(target.textContent);
-        playDrag();
-        e.preventDefault();
-    }
-});
-document.addEventListener('touchend', function(e) {
-    const dragging = document.querySelector('.number-option.dragging');
-    if (dragging) dragging.classList.remove('dragging');
-    window._touchDragNum = null;
-});
-document.addEventListener('touchmove', function(e) {
-    // 可扩展为拖动跟随手指动画
-});
-document.addEventListener('touchstart', function(e) {
-    // 触摸空格时填入数字
-    const blank = e.target.closest('.decomp-blank, .comp-blank');
-    if (blank && window._touchDragNum != null) {
-        if (blank.classList.contains('decomp-blank')) {
-            if (!window._decompFilled) {
-                blank.innerHTML = `<span class='filled'>${window._touchDragNum}</span>`;
-                window._decompFilled = true;
-                document.querySelectorAll('.decomp-options .number-option').forEach(opt => {
-                    if (parseInt(opt.textContent) === window._touchDragNum) opt.classList.add('used');
-                });
-                setTimeout(() => {
-                    if (window._decompKnown + window._touchDragNum === window._decompTarget) {
-                        playCorrect();
-                        totalScore++;
-                        questionCount++;
-                        document.getElementById('totalScore').textContent = totalScore;
-                        updateProgress();
-                        document.getElementById('feedback').textContent = '太棒了！答对了！';
-                        document.getElementById('feedback').className = 'feedback correct';
-                        setTimeout(renderQuestion, 800);
-                    } else {
-                        playWrong();
-                        document.getElementById('feedback').textContent = '再试一次吧！';
-                        document.getElementById('feedback').className = 'feedback incorrect';
-                        setTimeout(() => {
-                            blank.innerHTML = `<span class='placeholder'>?</span>`;
-                            window._decompFilled = false;
-                            document.querySelectorAll('.decomp-options .number-option').forEach(opt => opt.classList.remove('used'));
-                            document.getElementById('feedback').textContent = '';
-                            document.getElementById('feedback').className = 'feedback';
-                        }, 800);
-                    }
-                }, 300);
-            }
-        } else if (blank.classList.contains('comp-blank')) {
-            const idx = blank.id === 'compBlank1' ? 1 : 2;
-            blank.innerHTML = `<span class='filled'>${window._touchDragNum}</span>`;
-            window._compFilled[idx-1] = window._touchDragNum;
-            document.querySelectorAll('.comp-options .number-option').forEach(opt => {
-                if (parseInt(opt.textContent) === window._touchDragNum) opt.classList.add('used');
-            });
-            if (window._compFilled[0] !== null && window._compFilled[1] !== null) {
-                setTimeout(() => {
-                    const sum = window._compFilled[0] + window._compFilled[1];
-                    if (sum === window._compTarget) {
-                        playCorrect();
-                        totalScore++;
-                        questionCount++;
-                        document.getElementById('totalScore').textContent = totalScore;
-                        updateProgress();
-                        document.getElementById('feedback').textContent = '太棒了！答对了！';
-                        document.getElementById('feedback').className = 'feedback correct';
-                        setTimeout(renderQuestion, 800);
-                    } else {
-                        playWrong();
-                        document.getElementById('feedback').textContent = '再试一次吧！';
-                        document.getElementById('feedback').className = 'feedback incorrect';
-                        setTimeout(() => {
-                            document.getElementById('compBlank1').innerHTML = `<span class='placeholder'>?</span>`;
-                            document.getElementById('compBlank2').innerHTML = `<span class='placeholder'>?</span>`;
-                            window._compFilled = [null, null];
-                            document.querySelectorAll('.comp-options .number-option').forEach(opt => opt.classList.remove('used'));
-                            document.getElementById('feedback').textContent = '';
-                            document.getElementById('feedback').className = 'feedback';
-                        }, 800);
-                    }
-                }, 300);
-            }
-        }
-        window._touchDragNum = null;
-    }
-}, {passive: false});
 
 // 加减法
 function genArithmetic() {
