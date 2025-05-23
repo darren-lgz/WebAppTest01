@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>趣味数学 - 幼儿园数学学习</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>趣味数学</h1>
+            <nav>
+                <button onclick="showSection('numbers')">认识数字</button>
+                <button onclick="showSection('addition')">加法练习</button>
+                <button onclick="showSection('subtraction')">减法练习</button>
+                <button onclick="showSection('composition')">数字组合</button>
+            </nav>
+        </header>
+
+        <main>
+            <section id="numbers" class="game-section active">
+                <h2>认识数字</h2>
+                <div class="number-display">
+                    <div class="current-number">1</div>
+                    <div class="number-controls">
+                        <button onclick="previousNumber()">上一个</button>
+                        <button onclick="nextNumber()">下一个</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="addition" class="game-section">
+                <h2>加法练习</h2>
+                <div class="math-problem">
+                    <span id="num1">3</span> + <span id="num2">2</span> = 
+                    <input type="number" id="answer" max="20">
+                    <button onclick="checkAnswer('addition')">检查</button>
+                </div>
+                <div class="score">得分：<span id="additionScore">0</span></div>
+            </section>
+
+            <section id="subtraction" class="game-section">
+                <h2>减法练习</h2>
+                <div class="math-problem">
+                    <span id="subNum1">5</span> - <span id="subNum2">2</span> = 
+                    <input type="number" id="subAnswer" max="20">
+                    <button onclick="checkAnswer('subtraction')">检查</button>
+                </div>
+                <div class="score">得分：<span id="subtractionScore">0</span></div>
+            </section>
+
+            <section id="composition" class="game-section">
+                <h2>数字组合</h2>
+                <div class="composition-game">
+                    <div>把数字 <span id="targetNumber">10</span> 分解成两个数</div>
+                    <div class="composition-inputs">
+                        <input type="number" id="comp1" max="20"> + 
+                        <input type="number" id="comp2" max="20">
+                        <button onclick="checkComposition()">检查</button>
+                    </div>
+                </div>
+                <div class="score">得分：<span id="compositionScore">0</span></div>
+            </section>
+        </main>
+
+        <div id="feedback" class="feedback"></div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
