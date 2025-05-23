@@ -40,15 +40,6 @@ window.onload = function() {
     // 预加载音效
     preloadSounds();
     
-    // 绑定游戏类型按钮
-    document.querySelectorAll('.game-type-btn').forEach(btn => {
-        btn.onclick = function() {
-            document.querySelectorAll('.game-type-btn').forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            currentGameType = this.dataset.type;
-            document.getElementById('decompRandomGroup').style.display = currentGameType === 'decomposition' ? 'block' : 'none';
-        };
-    });
     // 绑定开始游戏按钮
     document.getElementById('startBtn').onclick = startGame;
     // 绑定返回首页和重新开始
@@ -63,16 +54,44 @@ function showSetupOnly() {
 }
 
 function startGame() {
-    minNumber = parseInt(document.getElementById('minNumber').value);
-    maxNumber = parseInt(document.getElementById('maxNumber').value);
-    if (isNaN(minNumber) || isNaN(maxNumber) || minNumber < 1 || maxNumber < minNumber) {
-        alert('请输入有效的最小数和最大数！');
-        return;
+    // 根据游戏类型和设置获取数值范围
+    if (currentGameType === 'decomposition' && !document.getElementById('decompRandom').checked) {
+        // 数的分解且非乱序模式，使用分解值
+        const decompValue = parseInt(document.getElementById('decompValue').value);
+        if (isNaN(decompValue) || decompValue < 2) {
+            alert('请输入有效的分解值！');
+            return;
+        }
+        // 在非乱序模式下，minNumber和maxNumber不重要，但为了保险设置一下
+        minNumber = 1;
+        maxNumber = decompValue;
+    } else {
+        // 其他游戏或乱序模式，使用最小值和最大值
+        minNumber = parseInt(document.getElementById('minNumber').value);
+        maxNumber = parseInt(document.getElementById('maxNumber').value);
+        if (isNaN(minNumber) || isNaN(maxNumber) || minNumber < 1 || maxNumber < minNumber) {
+            alert('请输入有效的最小数和最大数！');
+            return;
+        }
     }
+    
+    // 重置游戏数据
     totalScore = 0;
     questionCount = 0;
     timeLeft = 120;
     questionHistory = [];
+    
+    // 清除上一次游戏的历史数据
+    window._lastDecompTarget = null;
+    window._decompFilled = false;
+    window._decompTarget = null;
+    window._decompKnown = null;
+    window._decompAnswer = null;
+    window._compFilled = [null, null];
+    window._compTarget = null;
+    window._compAnswer = null;
+    
+    // 显示游戏区域
     document.getElementById('setupSection').style.display = 'none';
     document.getElementById('gameArea').style.display = 'block';
     updateScore();
@@ -137,6 +156,7 @@ function resetGameState() {
     window._decompTarget = null;
     window._decompKnown = null;
     window._decompAnswer = null;
+    window._lastDecompTarget = null; // 清除上一次的目标数记录
     
     window._compFilled = [null, null];
     window._compTarget = null;
@@ -238,47 +258,67 @@ function genDecomposition() {
     const decompRandomEl = document.getElementById('decompRandom');
     const decompRandom = decompRandomEl ? decompRandomEl.checked : true;
     
-    // 设置最小目标数
-    let minTarget = Math.max(minNumber+1, 5);
-    if (maxNumber - minTarget < 0) minTarget = maxNumber;
+    // 根据是否随机选择目标数
+    if (decompRandom) {
+        // 设置最小目标数
+        let minTarget = Math.max(minNumber+1, 3);
+        if (maxNumber - minTarget < 0) minTarget = maxNumber;
+        
+        // 确保每次都能获取新的随机目标数
+        let newTarget;
+        let attempts = 0;
+        do {
+            newTarget = getRandomNumber(minTarget, maxNumber);
+            attempts++;
+        } while (newTarget === window._lastDecompTarget && attempts < 5);
+        
+        target = newTarget;
+        // 记录本次目标数，以便下次比较
+        window._lastDecompTarget = target;
+    } else {
+        // 固定目标数 - 使用分解值输入框的值
+        const decompValueEl = document.getElementById('decompValue');
+        target = decompValueEl ? parseInt(decompValueEl.value) : 5;
+        
+        // 确保目标数有效
+        if (isNaN(target) || target < 2) {
+            target = 5; // 默认值
+        }
+    }
+    
+    // 确保可分解性
+    let knownMin = 1;  // 非随机模式下，允许从1开始
+    let knownMax = target-1;
+    if (knownMax < knownMin) knownMax = knownMin;
     
     let tryCount = 0;
+    let currentQuestion;
     do {
-        if (decompRandom) {
-            target = getRandomNumber(minTarget, maxNumber);
-        } else {
-            target = maxNumber;
-        }
-        
-        // 确保可分解性
-        let knownMin = minNumber;
-        let knownMax = target-1;
-        if (knownMax < knownMin) knownMax = knownMin;
-        
         knownNum = getRandomNumber(knownMin, knownMax);
         answer = target - knownNum;
         
-        // 生成选项
-        options = new Set([answer]);
-        let optionAttempts = 0;
-        while (options.size < 4 && optionAttempts < 20) {
-            let opt = getRandomNumber(knownMin, knownMax);
-            if (opt !== answer && opt !== knownNum) options.add(opt);
-            if (options.size >= (knownMax-knownMin+1)) break;
-            optionAttempts++;
-        }
-        
-        // 确保有足够的选项
-        if (options.size < 2) {
-            options.add(knownMin);
-        }
-        
-        options = Array.from(options).sort(() => Math.random() - 0.5);
+        currentQuestion = {target, knownNum};
         tryCount++;
-    } while (isQuestionRepeated({target, knownNum}) && tryCount < 10);
+    } while (isQuestionRepeated(currentQuestion) && tryCount < 10);
     
     // 记录到历史
-    addToHistory({target, knownNum});
+    addToHistory(currentQuestion);
+    
+    // 生成选项
+    options = new Set([answer]);
+    let optionAttempts = 0;
+    while (options.size < 4 && optionAttempts < 20) {
+        let opt = getRandomNumber(knownMin, knownMax);
+        if (opt !== answer && opt !== knownNum) options.add(opt);
+        if (options.size >= (knownMax-knownMin+1)) break;
+        optionAttempts++;
+    }
+    // 如果最终选项数量仍然少于3，直接用[1,2,3]
+    if (options.size < 3) {
+        options = [1, 2, 3];
+    } else {
+        options = Array.from(options).sort(() => Math.random() - 0.5);
+    }
     
     // 渲染到界面
     try {
@@ -287,22 +327,22 @@ function genDecomposition() {
         
         gameContent.innerHTML = `
             <div class="decomp-container">
-                <div class="target-number">${target}</div>
-                <div class="decomp-triangle">
-                    <svg width="200" height="100" viewBox="0 0 200 100">
-                        <line x1="100" y1="10" x2="50" y2="90" stroke="#4ecdc4" stroke-width="3"/>
-                        <line x1="100" y1="10" x2="150" y2="90" stroke="#4ecdc4" stroke-width="3"/>
+                <div class="target-number" style="font-size: 3.2em; background-color: #f0f9ff; padding: 10px 40px; box-shadow: 0 4px 10px rgba(76,205,196,0.2); margin-bottom: 30px;">${target}</div>
+                <div class="decomp-triangle" style="position: relative; width: 260px; height: 160px; margin: 20px 0;">
+                    <svg width="260" height="120" viewBox="0 0 260 120" style="position: absolute; top: 30px;">
+                        <line x1="130" y1="10" x2="40" y2="110" stroke="#4ecdc4" stroke-width="3"/>
+                        <line x1="130" y1="10" x2="220" y2="110" stroke="#4ecdc4" stroke-width="3"/>
                     </svg>
-                    <div class="decomp-numbers">
-                        <div class="decomp-known">${knownNum}</div>
-                        <div class="decomp-blank" id="decompBlank" ondragover="event.preventDefault()" ondrop="dropDecomp(event)">
+                    <div class="decomp-numbers" style="display: flex; justify-content: space-between; padding: 0; position: absolute; bottom: 0; left: 0; right: 0; width: 260px;">
+                        <div class="decomp-known" style="margin-left: 10px; width: 64px; height: 64px; background-color: #f0f9ff; border: 2px solid #4ecdc4; font-size: 1.8em; display: flex; align-items: center; justify-content: center; border-radius: 12px;">${knownNum}</div>
+                        <div class="decomp-blank" id="decompBlank" ondragover="event.preventDefault()" ondrop="dropDecomp(event)" style="margin-right: 10px; width: 64px; height: 64px; background-color: #f0f9ff; border: 2px dashed #4ecdc4; font-size: 1.8em; display: flex; align-items: center; justify-content: center; border-radius: 12px; position: relative;">
                             <span class="placeholder">?</span>
                         </div>
                     </div>
                 </div>
-                <div class="decomp-options">
+                <div class="decomp-options" style="margin-top: 40px;">
                     ${options.map(num => `
-                        <div class="number-option" draggable="true" ondragstart="dragDecomp(event,${num})">${num}</div>
+                        <div class="number-option" draggable="true" ondragstart="dragDecomp(event,${num})" style="background-color: #4ecdc4; color: white; width: 64px; height: 64px; font-size: 1.8em; display: flex; align-items: center; justify-content: center; border-radius: 12px;">${num}</div>
                     `).join('')}
                 </div>
             </div>
@@ -313,6 +353,8 @@ function genDecomposition() {
         window._decompKnown = knownNum;
         window._decompTarget = target;
         window._decompFilled = false;
+        
+        console.log(`生成分解题目: ${target} = ${knownNum} + ${answer}`);
     } catch (error) {
         console.error("生成分解题目错误:", error);
         // 如果生成题目出错，提供一个备用的简单题目
@@ -330,6 +372,8 @@ window.dragDecomp = function(event, num) {
         el.classList.remove('dragging');
     });
     event.target.classList.add('dragging');
+    
+    // 播放拖拽音效
     playSound('drag');
 };
 
@@ -349,7 +393,13 @@ window.dropDecomp = function(event) {
         const blank = document.getElementById('decompBlank');
         if (!blank) return; // 安全检查
         
-        blank.innerHTML = `<span class='filled'>${num}</span>`;
+        // 播放拖拽音效
+        playSound('drag');
+        
+        // 填入数字，保持原始拖拽块的样式
+        blank.innerHTML = `<span class='filled' style="color: white; font-size: 1.8em;">${num}</span>`;
+        blank.style.backgroundColor = '#4ecdc4';
+        blank.style.border = '2px solid #4ecdc4';
         window._decompFilled = true;
         
         // 标记已使用的选项
@@ -372,9 +422,23 @@ window.dropDecomp = function(event) {
             const known = window._decompKnown;
             
             if (known + num === target) {
+                // 答案正确
                 totalScore++;
                 questionCount++;
                 updateScore();
+                
+                // 添加对勾图标
+                blank.innerHTML += `
+                    <div class=\"checkmark\" style=\"position: absolute; right: -8px; bottom: -8px; width: 24px; height: 24px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(76,205,196,0.3); z-index: 10;\">
+                        <svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"#4ecdc4\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">
+                            <polyline points=\"12 5 7 11 4 8\"></polyline>
+                        </svg>
+                    </div>
+                `;
+                
+                // 添加闪烁效果
+                blank.classList.add('flash');
+                
                 document.getElementById('feedback').textContent = '太棒了！答对了！';
                 document.getElementById('feedback').className = 'feedback correct';
                 playSound('correct');
@@ -386,15 +450,25 @@ window.dropDecomp = function(event) {
                     window._decompKnown = null; // 清空旧值
                     window._decompAnswer = null; // 清空旧值
                     renderQuestion();
-                }, 800);
+                }, 1200);
             } else {
+                // 答案错误
                 document.getElementById('feedback').textContent = '再试一次吧！';
                 document.getElementById('feedback').className = 'feedback incorrect';
                 playSound('wrong');
                 
+                // 添加抖动效果
+                blank.classList.add('shake');
+                
                 // 延迟后重置
                 setTimeout(() => {
-                    if (blank) blank.innerHTML = `<span class='placeholder'>?</span>`;
+                    // 恢复问号占位符
+                    if (blank) {
+                        blank.innerHTML = `<span class='placeholder'>?</span>`;
+                        blank.style.backgroundColor = '#f0f9ff';
+                        blank.style.border = '2px dashed #4ecdc4';
+                        blank.classList.remove('shake');
+                    }
                     window._decompFilled = false;
                     document.querySelectorAll('.decomp-options .number-option').forEach(opt => {
                         opt.classList.remove('used');

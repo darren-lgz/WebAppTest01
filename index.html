@@ -27,8 +27,12 @@
                     <label for="maxNumber">最大数：</label>
                     <input type="number" id="maxNumber" value="5" min="2" max="100">
                 </div>
+                <div class="setup-group" id="decompValueGroup" style="display:none;">
+                    <label for="decompValue">分解值：</label>
+                    <input type="number" id="decompValue" value="5" min="2" max="100">
+                </div>
                 <div class="setup-group" id="decompRandomGroup" style="display:none;">
-                    <label for="decompRandom"><input type="checkbox" id="decompRandom" checked> 乱序（每题目标数字随机）</label>
+                    <label for="decompRandom"><input type="checkbox" id="decompRandom" checked> 随机目标数（使用最小数~最大数范围）</label>
                 </div>
                 <button id="startBtn">开始游戏</button>
             </div>
@@ -67,15 +71,47 @@
                 document.querySelectorAll('.game-type-btn').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
                 currentGameType = this.dataset.type;
-                document.getElementById('decompRandomGroup').style.display = currentGameType === 'decomposition' ? 'block' : 'none';
+                
+                // 处理数的分解游戏相关设置项显示
+                const isDecomposition = currentGameType === 'decomposition';
+                document.getElementById('decompRandomGroup').style.display = isDecomposition ? 'block' : 'none';
+                
+                // 如果是数的分解游戏，根据乱序复选框状态决定显示哪些设置项
+                if (isDecomposition) {
+                    updateDecompSettings();
+                } else {
+                    // 非数的分解游戏时显示常规设置项
+                    document.getElementById('minNumber').parentElement.style.display = 'block';
+                    document.getElementById('maxNumber').parentElement.style.display = 'block';
+                    document.getElementById('decompValueGroup').style.display = 'none';
+                }
             };
         });
+        
+        // 绑定乱序复选框事件
+        document.getElementById('decompRandom').addEventListener('change', updateDecompSettings);
+        
         // 绑定开始游戏按钮
         document.getElementById('startBtn').onclick = startGame;
         // 绑定返回首页和重新开始
         document.getElementById('backHomeBtn').onclick = showSetupOnly;
         document.getElementById('restartBtn').onclick = startGame;
+        
+        // 初始检查游戏类型
+        if (currentGameType === 'decomposition') {
+            updateDecompSettings();
+        }
     });
+    
+    // 更新数的分解游戏设置项显示
+    function updateDecompSettings() {
+        const isRandom = document.getElementById('decompRandom').checked;
+        
+        // 根据是否随机显示不同的设置项
+        document.getElementById('minNumber').parentElement.style.display = isRandom ? 'block' : 'none';
+        document.getElementById('maxNumber').parentElement.style.display = isRandom ? 'block' : 'none';
+        document.getElementById('decompValueGroup').style.display = isRandom ? 'none' : 'block';
+    }
     </script>
 </body>
 </html> 

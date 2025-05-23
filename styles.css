@@ -431,6 +431,50 @@ h2 {
         min-height: 180px;
         padding: 0.5rem 0.2rem 1rem 0.2rem;
     }
+    .decomp-triangle {
+        width: 220px !important;
+        height: 160px !important;
+    }
+    
+    .decomp-triangle svg {
+        width: 220px !important;
+        height: 110px !important;
+        top: 20px !important;
+    }
+    
+    .decomp-numbers {
+        width: 220px !important;
+    }
+    
+    .decomp-known, .decomp-blank, .number-option {
+        width: 56px !important;
+        height: 56px !important;
+        font-size: 1.5em !important;
+    }
+    
+    .filled {
+        font-size: 1.5em !important;
+    }
+    
+    .decomp-known {
+        margin-left: 5px !important;
+    }
+    
+    .decomp-blank {
+        margin-right: 5px !important;
+    }
+    
+    .decomp-blank .checkmark {
+        right: -5px !important;
+        bottom: -5px !important;
+        width: 20px !important;
+        height: 20px !important;
+    }
+    
+    .decomp-blank .checkmark svg {
+        width: 14px !important;
+        height: 14px !important;
+    }
 }
 
 /* 设置区样式 */
@@ -1479,4 +1523,30 @@ h2 {
 
 .error-recovery button:hover {
     transform: scale(1.05);
+}
+
+/* 闪烁动画效果 */
+@keyframes flashScale {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.15); }
+    60% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+}
+
+.flash {
+    animation: flashScale 0.5s ease;
+}
+
+/* 抖动动画效果 */
+@keyframes shakeX {
+    0% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-8px); }
+    80% { transform: translateX(8px); }
+    100% { transform: translateX(0); }
+}
+
+.shake {
+    animation: shakeX 0.4s ease;
 } 
