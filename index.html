@@ -10,57 +10,77 @@
     <div class="container">
         <header>
             <h1>趣味数学</h1>
+            <div class="timer">剩余时间：<span id="timeLeft">120</span>秒</div>
+            <div class="total-score">总分：<span id="totalScore">0</span></div>
             <nav>
-                <button onclick="showSection('numbers')">认识数字</button>
-                <button onclick="showSection('addition')">加法练习</button>
-                <button onclick="showSection('subtraction')">减法练习</button>
-                <button onclick="showSection('composition')">数字组合</button>
+                <button onclick="showSection('quick-count')">一眼识数</button>
+                <button onclick="showSection('decomposition')">数的分解</button>
+                <button onclick="showSection('composition')">数的组合</button>
+                <button onclick="showSection('arithmetic')">加减法</button>
             </nav>
         </header>
 
         <main>
-            <section id="numbers" class="game-section active">
-                <h2>认识数字</h2>
-                <div class="number-display">
-                    <div class="current-number">1</div>
-                    <div class="number-controls">
-                        <button onclick="previousNumber()">上一个</button>
-                        <button onclick="nextNumber()">下一个</button>
+            <!-- 一眼识数游戏 -->
+            <section id="quick-count" class="game-section active">
+                <h2>一眼识数</h2>
+                <div class="balls-container" id="ballsContainer"></div>
+                <div class="number-options" id="numberOptions"></div>
+                <div class="progress-bar">
+                    <div class="progress" id="quickCountProgress"></div>
+                </div>
+            </section>
+
+            <!-- 数的分解游戏 -->
+            <section id="decomposition" class="game-section">
+                <h2>数的分解</h2>
+                <div class="decomposition-container">
+                    <div class="target-number" id="decompTarget">8</div>
+                    <div class="decomposition-inputs">
+                        <input type="number" id="decomp1" min="0" max="20">
+                        <span>+</span>
+                        <input type="number" id="decomp2" min="0" max="20">
                     </div>
+                    <button onclick="checkDecomposition()">检查</button>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress" id="decompProgress"></div>
                 </div>
             </section>
 
-            <section id="addition" class="game-section">
-                <h2>加法练习</h2>
-                <div class="math-problem">
-                    <span id="num1">3</span> + <span id="num2">2</span> = 
-                    <input type="number" id="answer" max="20">
-                    <button onclick="checkAnswer('addition')">检查</button>
-                </div>
-                <div class="score">得分：<span id="additionScore">0</span></div>
-            </section>
-
-            <section id="subtraction" class="game-section">
-                <h2>减法练习</h2>
-                <div class="math-problem">
-                    <span id="subNum1">5</span> - <span id="subNum2">2</span> = 
-                    <input type="number" id="subAnswer" max="20">
-                    <button onclick="checkAnswer('subtraction')">检查</button>
-                </div>
-                <div class="score">得分：<span id="subtractionScore">0</span></div>
-            </section>
-
+            <!-- 数的组合游戏 -->
             <section id="composition" class="game-section">
-                <h2>数字组合</h2>
-                <div class="composition-game">
-                    <div>把数字 <span id="targetNumber">10</span> 分解成两个数</div>
+                <h2>数的组合</h2>
+                <div class="composition-container">
+                    <div class="target-number" id="compTarget">?</div>
                     <div class="composition-inputs">
-                        <input type="number" id="comp1" max="20"> + 
-                        <input type="number" id="comp2" max="20">
-                        <button onclick="checkComposition()">检查</button>
+                        <input type="number" id="comp1" min="0" max="20">
+                        <span>+</span>
+                        <input type="number" id="comp2" min="0" max="20">
                     </div>
+                    <button onclick="checkComposition()">检查</button>
                 </div>
-                <div class="score">得分：<span id="compositionScore">0</span></div>
+                <div class="progress-bar">
+                    <div class="progress" id="compProgress"></div>
+                </div>
+            </section>
+
+            <!-- 加减法游戏 -->
+            <section id="arithmetic" class="game-section">
+                <h2>加减法</h2>
+                <div class="arithmetic-container">
+                    <div class="problem" id="arithmeticProblem">
+                        <span id="num1">5</span>
+                        <span id="operator">+</span>
+                        <span id="num2">3</span>
+                        <span>=</span>
+                        <input type="number" id="arithmeticAnswer">
+                    </div>
+                    <button onclick="checkArithmetic()">检查</button>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress" id="arithmeticProgress"></div>
+                </div>
             </section>
         </main>
 

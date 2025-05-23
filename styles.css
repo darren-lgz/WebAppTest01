@@ -34,11 +34,19 @@ h1 {
     margin-bottom: 20px;
 }
 
+/* 计时器和分数 */
+.timer, .total-score {
+    font-size: 1.2em;
+    margin: 10px 0;
+    color: #2d3436;
+}
+
 nav {
     display: flex;
     justify-content: center;
     gap: 10px;
     flex-wrap: wrap;
+    margin-top: 20px;
 }
 
 /* 按钮样式 */
@@ -78,32 +86,89 @@ h2 {
     text-align: center;
 }
 
-/* 数字显示区域 */
-.number-display {
-    text-align: center;
-    margin: 30px 0;
-}
-
-.current-number {
-    font-size: 8em;
-    color: #ff6b6b;
+/* 一眼识数游戏 */
+.balls-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
     margin: 20px 0;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+    min-height: 200px;
 }
 
-.number-controls {
+.ball {
+    width: 40px;
+    height: 40px;
+    background-color: #ff6b6b;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.number-options {
     display: flex;
     justify-content: center;
-    gap: 20px;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 20px 0;
 }
 
-/* 数学题目样式 */
-.math-problem {
-    font-size: 2em;
+.number-option {
+    width: 60px;
+    height: 60px;
+    background-color: #4ecdc4;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    color: white;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.number-option:hover {
+    transform: scale(1.1);
+}
+
+/* 数的分解和组合游戏 */
+.decomposition-container,
+.composition-container {
     text-align: center;
     margin: 30px 0;
 }
 
+.target-number {
+    font-size: 4em;
+    color: #ff6b6b;
+    margin: 20px 0;
+}
+
+.decomposition-inputs,
+.composition-inputs {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+/* 加减法游戏 */
+.arithmetic-container {
+    text-align: center;
+    margin: 30px 0;
+}
+
+.problem {
+    font-size: 2.5em;
+    margin: 20px 0;
+}
+
+/* 输入框样式 */
 input[type="number"] {
     font-size: 1em;
     padding: 10px;
@@ -114,12 +179,21 @@ input[type="number"] {
     margin: 0 10px;
 }
 
-/* 分数显示 */
-.score {
-    text-align: center;
-    font-size: 1.2em;
-    color: #2d3436;
-    margin-top: 20px;
+/* 进度条 */
+.progress-bar {
+    width: 100%;
+    height: 10px;
+    background-color: #eee;
+    border-radius: 5px;
+    margin: 20px 0;
+    overflow: hidden;
+}
+
+.progress {
+    width: 100%;
+    height: 100%;
+    background-color: #4ecdc4;
+    transition: width 0.3s linear;
 }
 
 /* 反馈信息 */
@@ -141,16 +215,6 @@ input[type="number"] {
     color: white;
 }
 
-/* 数字组合游戏 */
-.composition-game {
-    text-align: center;
-    margin: 20px 0;
-}
-
-.composition-inputs {
-    margin: 20px 0;
-}
-
 /* 响应式设计 */
 @media (max-width: 600px) {
     .container {
@@ -161,12 +225,18 @@ input[type="number"] {
         font-size: 2em;
     }
     
-    .current-number {
-        font-size: 6em;
+    .ball {
+        width: 30px;
+        height: 30px;
     }
     
-    .math-problem {
-        font-size: 1.5em;
+    .number-option {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .problem {
+        font-size: 2em;
     }
     
     button {
