@@ -4,6 +4,12 @@ let timer = null;
 let timeLeft = 120;
 let totalScore = 0;
 let currentProgress = 0;
+let minNumber = 1;
+let maxNumber = 20;
+let currentGameType = 'quick-count';
+let lastQuestion = null;
+let questionCount = 0;
+const maxQuestions = 10;
 
 // 游戏配置
 const GAME_CONFIG = {
@@ -22,45 +28,81 @@ const GAME_CONFIG = {
     }
 };
 
-// 显示/隐藏游戏区域
+// 音效加载
+const audioCorrect = new Audio('sounds/correct.mp3');
+const audioWrong = new Audio('sounds/wrong.mp3');
+const audioDrag = new Audio('sounds/drag.mp3');
+function playCorrect() { audioCorrect.currentTime = 0; audioCorrect.play(); }
+function playWrong() { audioWrong.currentTime = 0; audioWrong.play(); }
+function playDrag() { audioDrag.currentTime = 0; audioDrag.play(); }
+
+// 页面加载后只显示设置区
+function showSetupOnly() {
+    document.getElementById('setupSection').style.display = 'flex';
+    document.getElementById('gameArea').style.display = 'none';
+    document.querySelector('.timer').style.display = 'none';
+    document.querySelector('.total-score').style.display = 'none';
+    document.querySelector('nav').style.display = 'none';
+    document.querySelectorAll('.game-section').forEach(section => {
+        section.classList.remove('active');
+    });
+    document.getElementById('feedback').textContent = '';
+    clearInterval(timer);
+}
+
+// 点击开始游戏
+function startGame() {
+    minNumber = parseInt(document.getElementById('minNumber').value);
+    maxNumber = parseInt(document.getElementById('maxNumber').value);
+    if (isNaN(minNumber) || isNaN(maxNumber) || minNumber < 1 || maxNumber < minNumber) {
+        alert('请输入有效的最小数和最大数！');
+        return;
+    }
+    totalScore = 0;
+    questionCount = 0;
+    timeLeft = 120;
+    currentProgress = 0;
+    lastQuestion = null;
+    document.getElementById('setupSection').style.display = 'none';
+    document.getElementById('gameArea').style.display = '';
+    document.getElementById('totalScore').textContent = totalScore;
+    updateTimer();
+    updateProgress();
+    clearInterval(timer);
+    startTimer();
+    renderQuestion();
+    addBackHomeBtn();
+}
+
+// 修改 showSection 只切换游戏，不重置设置
 function showSection(sectionId) {
-    // 停止当前游戏
     if (currentGame) {
         clearInterval(timer);
         timer = null;
     }
-    
-    // 隐藏所有游戏区域
     document.querySelectorAll('.game-section').forEach(section => {
         section.classList.remove('active');
     });
-    
-    // 显示选中的游戏区域
     document.getElementById(sectionId).classList.add('active');
-    
-    // 重置游戏状态
     timeLeft = 120;
     currentProgress = 0;
     updateTimer();
     updateProgress(sectionId);
-    
-    // 初始化新游戏
     currentGame = sectionId;
     initGame(sectionId);
-    
-    // 启动计时器
     startTimer();
 }
 
 // 计时器功能
 function startTimer() {
+    document.querySelector('.timer').style.display = '';
+    document.querySelector('.total-score').style.display = '';
     timer = setInterval(() => {
         timeLeft--;
         updateTimer();
-        
         if (timeLeft <= 0) {
             clearInterval(timer);
-            endGame();
+            showResult();
         }
     }, 1000);
 }
@@ -76,184 +118,396 @@ function updateProgress(gameId) {
     }
 }
 
-// 一眼识数游戏
-function initQuickCount() {
-    const container = document.getElementById('ballsContainer');
-    const optionsContainer = document.getElementById('numberOptions');
-    
-    // 清空容器
-    container.innerHTML = '';
-    optionsContainer.innerHTML = '';
-    
-    // 生成随机数量的球
-    const ballCount = getRandomNumber(1, GAME_CONFIG['quick-count'].maxBalls);
-    
-    // 创建球
-    for (let i = 0; i < ballCount; i++) {
-        const ball = document.createElement('div');
-        ball.className = 'ball';
-        container.appendChild(ball);
+// 修改所有题目生成逻辑，使用 minNumber/maxNumber
+function getRandomNumber(min, max) {
+    min = Math.max(min, minNumber);
+    max = Math.min(max, maxNumber);
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function renderQuestion() {
+    if (questionCount >= maxQuestions) {
+        clearInterval(timer);
+        showResult();
+        return;
     }
-    
-    // 生成选项
-    const options = new Set([ballCount]);
-    while (options.size < GAME_CONFIG['quick-count'].options) {
-        options.add(getRandomNumber(1, GAME_CONFIG['quick-count'].maxBalls));
-    }
-    
-    // 创建选项按钮
-    Array.from(options).sort(() => Math.random() - 0.5).forEach(num => {
-        const option = document.createElement('div');
-        option.className = 'number-option';
-        option.textContent = num;
-        option.onclick = () => checkQuickCount(num, ballCount);
-        optionsContainer.appendChild(option);
+    let q;
+    do {
+        if (currentGameType === 'quick-count') q = genQuickCount();
+        if (currentGameType === 'decomposition') q = genDecomposition();
+        if (currentGameType === 'composition') q = genComposition();
+        if (currentGameType === 'arithmetic') q = genArithmetic();
+    } while (lastQuestion && JSON.stringify(q.data) === JSON.stringify(lastQuestion.data));
+    lastQuestion = q;
+    document.getElementById('gameContent').innerHTML = q.html;
+    document.getElementById('feedback').textContent = '';
+    addBackHomeBtn();
+}
+
+// 首页按钮选择游戏类型
+function setupGameTypeBtns() {
+    const btns = document.querySelectorAll('.game-type-btn');
+    btns.forEach(btn => {
+        btn.onclick = function() {
+            btns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentGameType = this.getAttribute('data-type');
+        };
     });
 }
 
-// 数的分解游戏
-function initDecomposition() {
-    const target = getRandomNumber(5, GAME_CONFIG.decomposition.maxNumber);
-    document.getElementById('decompTarget').textContent = target;
-    document.getElementById('decomp1').value = '';
-    document.getElementById('decomp2').value = '';
-}
-
-// 数的组合游戏
-function initComposition() {
-    const num1 = getRandomNumber(1, 10);
-    const num2 = getRandomNumber(1, 10);
-    document.getElementById('comp1').value = num1;
-    document.getElementById('comp2').value = num2;
-    document.getElementById('compTarget').textContent = '?';
-}
-
-// 加减法游戏
-function initArithmetic() {
-    const operation = Math.random() < 0.5 ? '+' : '-';
-    let num1, num2;
-    
-    if (operation === '+') {
-        num1 = getRandomNumber(1, 10);
-        num2 = getRandomNumber(1, 10);
-    } else {
-        num1 = getRandomNumber(5, 20);
-        num2 = getRandomNumber(1, num1);
+// 游戏区右上角返回首页按钮
+function addBackHomeBtn() {
+    let header = document.querySelector('.game-header');
+    if (!document.getElementById('backHomeBtn')) {
+        const btn = document.createElement('button');
+        btn.id = 'backHomeBtn';
+        btn.textContent = '返回首页';
+        btn.style.cssText = 'position:absolute;right:10px;top:10px;background:#ff6b6b;color:#fff;border:none;border-radius:15px;padding:8px 18px;font-size:1em;cursor:pointer;z-index:10;';
+        btn.onclick = () => {
+            clearInterval(timer);
+            showSetupOnly();
+        };
+        header.style.position = 'relative';
+        header.appendChild(btn);
     }
-    
-    document.getElementById('num1').textContent = num1;
-    document.getElementById('operator').textContent = operation;
-    document.getElementById('num2').textContent = num2;
-    document.getElementById('arithmeticAnswer').value = '';
 }
 
-// 检查答案
-function checkQuickCount(selected, correct) {
-    const feedback = document.getElementById('feedback');
-    
+// 一眼识数
+function genQuickCount() {
+    const ballCount = getRandomNumber(minNumber, maxNumber);
+    let options = new Set([ballCount]);
+    while (options.size < 4) options.add(getRandomNumber(minNumber, maxNumber));
+    options = Array.from(options).sort(() => Math.random() - 0.5);
+    let html = `<div class='balls-container' style='position:relative;height:220px;'>`;
+    const areaW = 320, areaH = 200, r = 20;
+    let positions = [];
+    for (let i = 0; i < ballCount; i++) {
+        let x, y, tryCount = 0;
+        do {
+            x = Math.random() * (areaW - 2*r);
+            y = Math.random() * (areaH - 2*r);
+            tryCount++;
+        } while (positions.some(p => Math.hypot(p.x-x, p.y-y) < 2.2*r) && tryCount < 50);
+        positions.push({x, y});
+        html += `<div class='ball' style='position:absolute;left:${x}px;top:${y}px;'></div>`;
+    }
+    html += `</div><div class='number-options'>`;
+    options.forEach(num => {
+        html += `<div class='number-option' onclick='checkQuickCount(${num},${ballCount})'>${num}</div>`;
+    });
+    html += `</div>`;
+    return {html, data: {ballCount, options}};
+}
+window.checkQuickCount = function(selected, correct) {
     if (selected === correct) {
-        feedback.textContent = '太棒了！答对了！';
-        feedback.className = 'feedback correct';
+        playCorrect();
         totalScore++;
+        questionCount++;
         document.getElementById('totalScore').textContent = totalScore;
-        currentProgress += 0.1;
         updateProgress('quick-count');
-        
-        setTimeout(() => {
-            initQuickCount();
-            feedback.textContent = '';
-        }, 1000);
+        document.getElementById('feedback').textContent = '太棒了！答对了！';
+        setTimeout(renderQuestion, 800);
     } else {
-        feedback.textContent = '再试一次吧！';
-        feedback.className = 'feedback incorrect';
+        playWrong();
+        document.getElementById('feedback').textContent = '再试一次吧！';
     }
 }
 
-function checkDecomposition() {
-    const target = parseInt(document.getElementById('decompTarget').textContent);
-    const num1 = parseInt(document.getElementById('decomp1').value);
-    const num2 = parseInt(document.getElementById('decomp2').value);
-    const feedback = document.getElementById('feedback');
-    
-    if (num1 + num2 === target) {
-        feedback.textContent = '太棒了！答对了！';
-        feedback.className = 'feedback correct';
-        totalScore++;
-        document.getElementById('totalScore').textContent = totalScore;
-        currentProgress += 0.1;
-        updateProgress('decomposition');
-        
-        setTimeout(() => {
-            initDecomposition();
-            feedback.textContent = '';
-        }, 1000);
-    } else {
-        feedback.textContent = '再试一次吧！';
-        feedback.className = 'feedback incorrect';
-    }
+// 数的分解（拖拽版）
+function genDecomposition() {
+    const target = getRandomNumber(Math.max(minNumber+1, 5), maxNumber);
+    const knownNum = getRandomNumber(minNumber, target-1);
+    const answer = target - knownNum;
+    let options = new Set([answer]);
+    while (options.size < 4) options.add(getRandomNumber(minNumber, target-1));
+    options = Array.from(options).sort(() => Math.random() - 0.5);
+    let html = `<div class='triangle-layout' style='margin-bottom:30px;'>
+        <div class='target-number'>${target}</div>
+        <svg width='120' height='80' style='position:absolute;left:50%;top:60px;transform:translateX(-50%);z-index:0;'>
+            <line x1='60' y1='0' x2='20' y2='60' stroke='#4ecdc4' stroke-width='3'/>
+            <line x1='60' y1='0' x2='100' y2='60' stroke='#4ecdc4' stroke-width='3'/>
+        </svg>
+        <div class='decomposition-inputs' style='position:relative;z-index:1;gap:60px;'>
+            <div class='known-number'>${knownNum}</div>
+            <div class='decomp-blank' id='decompBlank' ondragover='event.preventDefault()' ondrop='dropDecomp(event,${answer})'>
+                <span class='placeholder'>?</span>
+            </div>
+        </div>
+    </div>
+    <div class='decomp-options' style='display:flex;justify-content:center;gap:20px;margin-top:30px;'>
+        ${options.map(num => `<div class='number-option' draggable='true' ondragstart='dragDecomp(event,${num})'>${num}</div>`).join('')}
+    </div>`;
+    // 记录当前正确答案
+    window._decompAnswer = answer;
+    window._decompKnown = knownNum;
+    window._decompTarget = target;
+    window._decompFilled = false;
+    return {html, data: {target, knownNum, answer, options}};
 }
-
-function checkComposition() {
-    const num1 = parseInt(document.getElementById('comp1').value);
-    const num2 = parseInt(document.getElementById('comp2').value);
-    const answer = parseInt(document.getElementById('compTarget').value);
-    const feedback = document.getElementById('feedback');
-    
-    if (num1 + num2 === answer) {
-        feedback.textContent = '太棒了！答对了！';
-        feedback.className = 'feedback correct';
-        totalScore++;
-        document.getElementById('totalScore').textContent = totalScore;
-        currentProgress += 0.1;
-        updateProgress('composition');
-        
-        setTimeout(() => {
-            initComposition();
-            feedback.textContent = '';
-        }, 1000);
-    } else {
-        feedback.textContent = '再试一次吧！';
-        feedback.className = 'feedback incorrect';
+window.dragDecomp = function(event, num) {
+    event.dataTransfer.setData('text/plain', num);
+    event.target.classList.add('dragging');
+    playDrag();
+};
+window.dropDecomp = function(event, answer) {
+    if (window._decompFilled) return;
+    const num = parseInt(event.dataTransfer.getData('text/plain'));
+    const blank = document.getElementById('decompBlank');
+    blank.innerHTML = `<span class='filled'>${num}</span>`;
+    window._decompFilled = true;
+    document.querySelectorAll('.decomp-options .number-option').forEach(opt => {
+        if (parseInt(opt.textContent) === num) opt.classList.add('used');
+    });
+    blank.classList.remove('dragover');
+    setTimeout(() => {
+        if (window._decompKnown + num === window._decompTarget) {
+            playCorrect();
+            totalScore++;
+            questionCount++;
+            document.getElementById('totalScore').textContent = totalScore;
+            updateProgress();
+            document.getElementById('feedback').textContent = '太棒了！答对了！';
+            document.getElementById('feedback').className = 'feedback correct';
+            setTimeout(renderQuestion, 800);
+        } else {
+            playWrong();
+            document.getElementById('feedback').textContent = '再试一次吧！';
+            document.getElementById('feedback').className = 'feedback incorrect';
+            setTimeout(() => {
+                blank.innerHTML = `<span class='placeholder'>?</span>`;
+                window._decompFilled = false;
+                document.querySelectorAll('.decomp-options .number-option').forEach(opt => opt.classList.remove('used'));
+                document.getElementById('feedback').textContent = '';
+                document.getElementById('feedback').className = 'feedback';
+            }, 800);
+        }
+    }, 300);
+};
+document.addEventListener('dragover', function(e) {
+    if (e.target.classList.contains('decomp-blank') || e.target.classList.contains('comp-blank')) {
+        e.preventDefault();
+        e.target.classList.add('dragover');
     }
+});
+document.addEventListener('dragleave', function(e) {
+    if (e.target.classList.contains('decomp-blank') || e.target.classList.contains('comp-blank')) {
+        e.target.classList.remove('dragover');
+    }
+});
+document.addEventListener('drop', function(e) {
+    if (e.target.classList.contains('decomp-blank') || e.target.classList.contains('comp-blank')) {
+        e.target.classList.remove('dragover');
+    }
+});
+
+// 数的组合（拖拽版）
+function genComposition() {
+    const target = getRandomNumber(Math.max(minNumber+1, 5), maxNumber);
+    // 生成一组分解（保证两个数都在范围内）
+    let num1 = getRandomNumber(minNumber, target-1);
+    let num2 = target - num1;
+    if (num2 < minNumber || num2 > maxNumber) {
+        num2 = minNumber;
+        num1 = target - num2;
+    }
+    // 生成选项
+    let options = new Set([num1, num2]);
+    while (options.size < 6) options.add(getRandomNumber(minNumber, maxNumber));
+    options = Array.from(options).sort(() => Math.random() - 0.5);
+    let html = `<div class='composition-layout' style='margin-bottom:30px;'>
+        <div class='composition-problem' style='font-size:2em;display:flex;align-items:center;justify-content:center;gap:20px;'>
+            <div class='comp-blank' id='compBlank1' ondragover='event.preventDefault()' ondrop='dropComp(event,1)'><span class='placeholder'>?</span></div>
+            <span>+</span>
+            <div class='comp-blank' id='compBlank2' ondragover='event.preventDefault()' ondrop='dropComp(event,2)'><span class='placeholder'>?</span></div>
+            <span>=</span>
+            <span class='target-number'>${target}</span>
+        </div>
+        <div class='comp-options' style='display:flex;justify-content:center;gap:20px;margin-top:30px;'>
+            ${options.map(num => `<div class='number-option' draggable='true' ondragstart='dragComp(event,${num})'>${num}</div>`).join('')}
+        </div>
+    </div>`;
+    window._compTarget = target;
+    window._compFilled = [null, null];
+    window._compAnswer = [num1, num2];
+    return {html, data: {target, num1, num2, options}};
 }
-
-function checkArithmetic() {
-    const num1 = parseInt(document.getElementById('num1').textContent);
-    const num2 = parseInt(document.getElementById('num2').textContent);
-    const operator = document.getElementById('operator').textContent;
-    const answer = parseInt(document.getElementById('arithmeticAnswer').value);
-    const feedback = document.getElementById('feedback');
-    
-    let correctAnswer;
-    if (operator === '+') {
-        correctAnswer = num1 + num2;
-    } else {
-        correctAnswer = num1 - num2;
+window.dragComp = function(event, num) {
+    event.dataTransfer.setData('text/plain', num);
+    event.target.classList.add('dragging');
+    playDrag();
+};
+window.dropComp = function(event, idx) {
+    const num = parseInt(event.dataTransfer.getData('text/plain'));
+    const blank = document.getElementById('compBlank'+idx);
+    blank.innerHTML = `<span class='filled'>${num}</span>`;
+    window._compFilled[idx-1] = num;
+    document.querySelectorAll('.comp-options .number-option').forEach(opt => {
+        if (parseInt(opt.textContent) === num) opt.classList.add('used');
+    });
+    blank.classList.remove('dragover');
+    if (window._compFilled[0] !== null && window._compFilled[1] !== null) {
+        setTimeout(() => {
+            const sum = window._compFilled[0] + window._compFilled[1];
+            if (sum === window._compTarget) {
+                playCorrect();
+                totalScore++;
+                questionCount++;
+                document.getElementById('totalScore').textContent = totalScore;
+                updateProgress();
+                document.getElementById('feedback').textContent = '太棒了！答对了！';
+                document.getElementById('feedback').className = 'feedback correct';
+                setTimeout(renderQuestion, 800);
+            } else {
+                playWrong();
+                document.getElementById('feedback').textContent = '再试一次吧！';
+                document.getElementById('feedback').className = 'feedback incorrect';
+                setTimeout(() => {
+                    document.getElementById('compBlank1').innerHTML = `<span class='placeholder'>?</span>`;
+                    document.getElementById('compBlank2').innerHTML = `<span class='placeholder'>?</span>`;
+                    window._compFilled = [null, null];
+                    document.querySelectorAll('.comp-options .number-option').forEach(opt => opt.classList.remove('used'));
+                    document.getElementById('feedback').textContent = '';
+                    document.getElementById('feedback').className = 'feedback';
+                }, 800);
+            }
+        }, 300);
     }
-    
-    if (answer === correctAnswer) {
-        feedback.textContent = '太棒了！答对了！';
-        feedback.className = 'feedback correct';
+};
+
+// 移动端适配：touch拖拽（简化实现，点击数字填入空格）
+document.addEventListener('touchstart', function(e) {
+    const target = e.target;
+    if (target.classList.contains('number-option') && target.getAttribute('draggable') === 'true') {
+        target.classList.add('dragging');
+        window._touchDragNum = parseInt(target.textContent);
+        playDrag();
+        e.preventDefault();
+    }
+});
+document.addEventListener('touchend', function(e) {
+    const dragging = document.querySelector('.number-option.dragging');
+    if (dragging) dragging.classList.remove('dragging');
+    window._touchDragNum = null;
+});
+document.addEventListener('touchmove', function(e) {
+    // 可扩展为拖动跟随手指动画
+});
+document.addEventListener('touchstart', function(e) {
+    // 触摸空格时填入数字
+    const blank = e.target.closest('.decomp-blank, .comp-blank');
+    if (blank && window._touchDragNum != null) {
+        if (blank.classList.contains('decomp-blank')) {
+            if (!window._decompFilled) {
+                blank.innerHTML = `<span class='filled'>${window._touchDragNum}</span>`;
+                window._decompFilled = true;
+                document.querySelectorAll('.decomp-options .number-option').forEach(opt => {
+                    if (parseInt(opt.textContent) === window._touchDragNum) opt.classList.add('used');
+                });
+                setTimeout(() => {
+                    if (window._decompKnown + window._touchDragNum === window._decompTarget) {
+                        playCorrect();
+                        totalScore++;
+                        questionCount++;
+                        document.getElementById('totalScore').textContent = totalScore;
+                        updateProgress();
+                        document.getElementById('feedback').textContent = '太棒了！答对了！';
+                        document.getElementById('feedback').className = 'feedback correct';
+                        setTimeout(renderQuestion, 800);
+                    } else {
+                        playWrong();
+                        document.getElementById('feedback').textContent = '再试一次吧！';
+                        document.getElementById('feedback').className = 'feedback incorrect';
+                        setTimeout(() => {
+                            blank.innerHTML = `<span class='placeholder'>?</span>`;
+                            window._decompFilled = false;
+                            document.querySelectorAll('.decomp-options .number-option').forEach(opt => opt.classList.remove('used'));
+                            document.getElementById('feedback').textContent = '';
+                            document.getElementById('feedback').className = 'feedback';
+                        }, 800);
+                    }
+                }, 300);
+            }
+        } else if (blank.classList.contains('comp-blank')) {
+            const idx = blank.id === 'compBlank1' ? 1 : 2;
+            blank.innerHTML = `<span class='filled'>${window._touchDragNum}</span>`;
+            window._compFilled[idx-1] = window._touchDragNum;
+            document.querySelectorAll('.comp-options .number-option').forEach(opt => {
+                if (parseInt(opt.textContent) === window._touchDragNum) opt.classList.add('used');
+            });
+            if (window._compFilled[0] !== null && window._compFilled[1] !== null) {
+                setTimeout(() => {
+                    const sum = window._compFilled[0] + window._compFilled[1];
+                    if (sum === window._compTarget) {
+                        playCorrect();
+                        totalScore++;
+                        questionCount++;
+                        document.getElementById('totalScore').textContent = totalScore;
+                        updateProgress();
+                        document.getElementById('feedback').textContent = '太棒了！答对了！';
+                        document.getElementById('feedback').className = 'feedback correct';
+                        setTimeout(renderQuestion, 800);
+                    } else {
+                        playWrong();
+                        document.getElementById('feedback').textContent = '再试一次吧！';
+                        document.getElementById('feedback').className = 'feedback incorrect';
+                        setTimeout(() => {
+                            document.getElementById('compBlank1').innerHTML = `<span class='placeholder'>?</span>`;
+                            document.getElementById('compBlank2').innerHTML = `<span class='placeholder'>?</span>`;
+                            window._compFilled = [null, null];
+                            document.querySelectorAll('.comp-options .number-option').forEach(opt => opt.classList.remove('used'));
+                            document.getElementById('feedback').textContent = '';
+                            document.getElementById('feedback').className = 'feedback';
+                        }, 800);
+                    }
+                }, 300);
+            }
+        }
+        window._touchDragNum = null;
+    }
+}, {passive: false});
+
+// 加减法
+function genArithmetic() {
+    const op = Math.random() < 0.5 ? '+' : '-';
+    let num1, num2, answer;
+    if (op === '+') {
+        num1 = getRandomNumber(minNumber, maxNumber);
+        num2 = getRandomNumber(minNumber, maxNumber);
+        answer = num1 + num2;
+    } else {
+        num1 = getRandomNumber(Math.max(minNumber+1, minNumber), maxNumber);
+        num2 = getRandomNumber(minNumber, num1);
+        answer = num1 - num2;
+    }
+    let options = new Set([answer]);
+    while (options.size < 4) options.add(getRandomNumber(answer-5, answer+5));
+    options = Array.from(options).filter(n => n >= minNumber && n <= maxNumber).sort(() => Math.random() - 0.5);
+    let html = `<div class='arithmetic-layout'>
+        <div class='arithmetic-problem'><span>${num1}</span> <span>${op}</span> <span>${num2}</span> = ?</div>
+        <div class='number-options'>
+            ${options.map(num => `<div class='number-option' onclick='checkArithmetic(${num1},${num2},\'${op}\',${num})'>${num}</div>`).join('')}
+        </div>
+    </div>`;
+    return {html, data: {num1, num2, op, answer, options}};
+}
+window.checkArithmetic = function(num1, num2, op, selected) {
+    let correct = op === '+' ? num1 + num2 : num1 - num2;
+    if (selected === correct) {
+        playCorrect();
         totalScore++;
+        questionCount++;
         document.getElementById('totalScore').textContent = totalScore;
-        currentProgress += 0.1;
         updateProgress('arithmetic');
-        
-        setTimeout(() => {
-            initArithmetic();
-            feedback.textContent = '';
-        }, 1000);
+        document.getElementById('feedback').textContent = '太棒了！答对了！';
+        setTimeout(renderQuestion, 800);
     } else {
-        feedback.textContent = '再试一次吧！';
-        feedback.className = 'feedback incorrect';
+        playWrong();
+        document.getElementById('feedback').textContent = '再试一次吧！';
     }
 }
 
 // 辅助函数
-function getRandomNumber(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
 function initGame(gameId) {
     switch (gameId) {
         case 'quick-count':
@@ -271,13 +525,16 @@ function initGame(gameId) {
     }
 }
 
-function endGame() {
-    const feedback = document.getElementById('feedback');
-    feedback.textContent = `游戏结束！你的得分是：${totalScore}`;
-    feedback.className = 'feedback';
+function showResult() {
+    setTimeout(() => {
+        alert(`时间到！你的得分是：${totalScore} / ${questionCount}`);
+        showSetupOnly();
+    }, 100);
 }
 
-// 页面加载完成后初始化游戏
+// 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', () => {
-    showSection('quick-count');
+    setupGameTypeBtns();
+    showSetupOnly();
+    document.getElementById('startBtn').onclick = startGame;
 }); 

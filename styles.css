@@ -142,19 +142,79 @@ h2 {
     margin: 30px 0;
 }
 
+.triangle-layout {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 .target-number {
     font-size: 4em;
     color: #ff6b6b;
     margin: 20px 0;
+    position: relative;
+    z-index: 2;
 }
 
-.decomposition-inputs,
-.composition-inputs {
+.guide-lines {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+.line {
+    position: absolute;
+    background-color: #4ecdc4;
+    width: 2px;
+    height: 100px;
+    top: 50%;
+    left: 50%;
+    transform-origin: top center;
+}
+
+.line:nth-child(1) {
+    transform: translateX(-50%) rotate(-30deg);
+}
+
+.line:nth-child(2) {
+    transform: translateX(-50%) rotate(30deg);
+}
+
+.decomposition-inputs {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 10px;
-    margin: 20px 0;
+    gap: 40px;
+    margin-top: 20px;
+    position: relative;
+    z-index: 2;
+}
+
+.known-number {
+    font-size: 2.5em;
+    color: #4ecdc4;
+    padding: 10px 20px;
+    background-color: #f0f9ff;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+input[type="number"] {
+    font-size: 2.5em;
+    padding: 10px;
+    width: 100px;
+    border: 2px solid #4ecdc4;
+    border-radius: 10px;
+    text-align: center;
+    background-color: #f0f9ff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* 加减法游戏 */
@@ -166,17 +226,6 @@ h2 {
 .problem {
     font-size: 2.5em;
     margin: 20px 0;
-}
-
-/* 输入框样式 */
-input[type="number"] {
-    font-size: 1em;
-    padding: 10px;
-    width: 80px;
-    border: 2px solid #4ecdc4;
-    border-radius: 10px;
-    text-align: center;
-    margin: 0 10px;
 }
 
 /* 进度条 */
@@ -199,48 +248,238 @@ input[type="number"] {
 /* 反馈信息 */
 .feedback {
     text-align: center;
-    padding: 10px;
-    margin: 10px 0;
-    border-radius: 10px;
-    font-size: 1.2em;
+    padding: 16px;
+    margin: 16px 0;
+    border-radius: 12px;
+    font-size: 1.4em;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(255,107,107,0.08);
 }
 
 .feedback.correct {
     background-color: #a8e6cf;
     color: #2d3436;
+    border: 2px solid #4ecdc4;
 }
 
 .feedback.incorrect {
     background-color: #ff8b94;
     color: white;
+    border: 2px solid #ff6b6b;
 }
 
 /* 响应式设计 */
 @media (max-width: 600px) {
     .container {
-        padding: 10px;
+        padding: 0;
+        max-width: 100vw;
     }
-    
-    h1 {
-        font-size: 2em;
+    .game-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        background: #fff;
+        z-index: 100;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        padding: 8px 0 4px 0;
     }
-    
-    .ball {
-        width: 30px;
-        height: 30px;
+    main {
+        margin-top: 80px;
     }
-    
+    .number-options, .decomp-options, .comp-options {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100vw;
+        background: #f0f9ff;
+        z-index: 99;
+        padding: 8px 0 12px 0;
+        box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+        gap: 10px !important;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    .balls-container {
+        min-height: 100px;
+        height: 100px !important;
+        width: 100vw;
+        gap: 4px;
+        margin-bottom: 60px;
+    }
+    .decomp-blank, .comp-blank {
+        min-width: 56px;
+        min-height: 56px;
+        font-size: 1.7em;
+        margin: 0 6px;
+        touch-action: manipulation;
+    }
+    .number-option, .decomp-blank, .comp-blank {
+        min-width: 56px;
+        min-height: 56px;
+        font-size: 1.7em;
+        padding: 8px;
+        touch-action: manipulation;
+    }
     .number-option {
-        width: 50px;
-        height: 50px;
+        border-radius: 16px;
+        box-shadow: 0 2px 8px rgba(76,205,196,0.08);
+        transition: transform 0.18s, box-shadow 0.18s;
     }
-    
-    .problem {
+    .number-option:active, .number-option.dragging {
+        transform: scale(1.22);
+        box-shadow: 0 4px 16px rgba(255,107,107,0.18);
+        background: #ffeaea;
+    }
+    .feedback {
+        font-size: 1.2em;
+        padding: 12px;
+        margin: 12px 0 70px 0;
+        background: #fffbe6;
+        box-shadow: 0 2px 8px rgba(255,107,107,0.08);
+    }
+    .composition-problem {
+        font-size: 1.3em !important;
+        gap: 10px !important;
+    }
+    .target-number {
         font-size: 2em;
+        margin: 8px 0;
     }
-    
-    button {
-        padding: 8px 16px;
-        font-size: 1em;
+    #startBtn, .game-type-btn {
+        font-size: 1.1em;
+        padding: 10px 16px;
+        border-radius: 18px;
     }
+    .setup-group label {
+        font-size: 1.1em;
+    }
+}
+
+/* 设置区样式 */
+#setupSection {
+    background: #fff;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+    padding: 30px 20px;
+    margin: 30px auto 30px auto;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.setup-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1em;
+}
+
+#setupSection label {
+    min-width: 70px;
+    color: #2d3436;
+}
+
+#setupSection input[type="number"],
+#setupSection select {
+    font-size: 1.1em;
+    padding: 6px 12px;
+    border: 1.5px solid #4ecdc4;
+    border-radius: 8px;
+    outline: none;
+    background: #f0f9ff;
+}
+
+#startBtn {
+    background-color: #ff6b6b;
+    color: #fff;
+    border: none;
+    padding: 12px 32px;
+    border-radius: 25px;
+    font-size: 1.2em;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: background 0.2s, transform 0.2s;
+}
+#startBtn:hover {
+    background-color: #e55d5d;
+    transform: scale(1.05);
+}
+
+.game-type-btns {
+    display: flex;
+    gap: 10px;
+}
+.game-type-btn {
+    background: #4ecdc4;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 10px 22px;
+    font-size: 1.1em;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+}
+.game-type-btn.active {
+    background: #ff6b6b;
+    color: #fff;
+    font-weight: bold;
+    transform: scale(1.08);
+}
+.game-type-btn:hover {
+    background: #45b7af;
+}
+
+/* 拖拽高亮与动画 */
+.decomp-blank, .comp-blank {
+    min-width: 60px;
+    min-height: 60px;
+    border: 2.5px dashed #4ecdc4;
+    border-radius: 12px;
+    background: #f8f8ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2em;
+    margin: 0 10px;
+    transition: border-color 0.2s, background 0.2s;
+}
+.decomp-blank.dragover, .comp-blank.dragover {
+    border-color: #ff6b6b;
+    background: #fff0f0;
+}
+.placeholder {
+    color: #bbb;
+    font-size: 1.5em;
+}
+.filled {
+    color: #4ecdc4;
+    font-weight: bold;
+    font-size: 2em;
+}
+.number-option[draggable="true"] {
+    cursor: grab;
+    transition: transform 0.2s, opacity 0.2s;
+}
+.number-option[draggable="true"]:active {
+    transform: scale(1.18);
+    opacity: 0.7;
+}
+.number-option.dragging {
+    transform: scale(1.18);
+    opacity: 0.7;
+}
+.number-option.used {
+    opacity: 0.3;
+    pointer-events: none;
+}
+.comp-options, .decomp-options, .number-options {
+    gap: 18px !important;
+}
+.number-option, .decomp-blank, .comp-blank {
+    min-width: 60px;
+    min-height: 60px;
+    font-size: 2em;
 } 
