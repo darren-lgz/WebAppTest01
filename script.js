@@ -355,6 +355,8 @@ function genDecomposition() {
         window._decompFilled = false;
         
         console.log(`生成分解题目: ${target} = ${knownNum} + ${answer}`);
+        
+        if(window.afterRenderDecomp) window.afterRenderDecomp();
     } catch (error) {
         console.error("生成分解题目错误:", error);
         // 如果生成题目出错，提供一个备用的简单题目
@@ -758,4 +760,131 @@ function handleDragLeave(e) {
     if (e.target === this) {
         this.classList.remove('dragover');
     }
-} 
+}
+
+// 移动端touch拖拽支持
+function enableTouchDragForDecomp() {
+    const options = document.querySelectorAll('.decomp-options .number-option');
+    const blank = document.getElementById('decompBlank');
+    if (!blank) return;
+    options.forEach(opt => {
+        opt.ontouchstart = function(e) {
+            e.preventDefault();
+            const num = parseInt(this.textContent);
+            this.classList.add('dragging');
+            let moveHandler, endHandler;
+            // 创建跟随手指的影子
+            let shadow = this.cloneNode(true);
+            shadow.style.position = 'fixed';
+            shadow.style.zIndex = 9999;
+            shadow.style.opacity = 0.8;
+            shadow.style.pointerEvents = 'none';
+            shadow.style.left = e.touches[0].clientX - 22 + 'px';
+            shadow.style.top = e.touches[0].clientY - 22 + 'px';
+            document.body.appendChild(shadow);
+            playSound('drag');
+            moveHandler = function(ev) {
+                shadow.style.left = ev.touches[0].clientX - 22 + 'px';
+                shadow.style.top = ev.touches[0].clientY - 22 + 'px';
+                // 判断是否进入blank区域
+                const rect = blank.getBoundingClientRect();
+                if (
+                    ev.touches[0].clientX > rect.left &&
+                    ev.touches[0].clientX < rect.right &&
+                    ev.touches[0].clientY > rect.top &&
+                    ev.touches[0].clientY < rect.bottom
+                ) {
+                    blank.classList.add('dragover');
+                } else {
+                    blank.classList.remove('dragover');
+                }
+            };
+            endHandler = function(ev) {
+                document.removeEventListener('touchmove', moveHandler);
+                document.removeEventListener('touchend', endHandler);
+                shadow.remove();
+                blank.classList.remove('dragover');
+                this.classList.remove('dragging');
+                // 判断是否松手在blank上
+                const touch = ev.changedTouches[0];
+                const rect = blank.getBoundingClientRect();
+                if (
+                    touch.clientX > rect.left &&
+                    touch.clientX < rect.right &&
+                    touch.clientY > rect.top &&
+                    touch.clientY < rect.bottom
+                ) {
+                    // 触发drop逻辑
+                    window._touchDropNum = num;
+                    dropDecompTouch();
+                }
+            }.bind(this);
+            document.addEventListener('touchmove', moveHandler, {passive: false});
+            document.addEventListener('touchend', endHandler, {passive: false});
+        };
+    });
+}
+// 移动端专用drop逻辑
+function dropDecompTouch() {
+    if (window._decompFilled) return;
+    const num = window._touchDropNum;
+    const blank = document.getElementById('decompBlank');
+    if (!blank) return;
+    // 填入数字，保持样式
+    blank.innerHTML = `<span class='filled' style="color: white; font-size: 1.8em;">${num}</span>`;
+    blank.style.backgroundColor = '#4ecdc4';
+    blank.style.border = '2px solid #4ecdc4';
+    window._decompFilled = true;
+    // 标记已使用的选项
+    document.querySelectorAll('.decomp-options .number-option').forEach(opt => {
+        if (parseInt(opt.textContent) === num) {
+            opt.classList.add('used');
+        }
+    });
+    // 答案检查（与PC端一致）
+    setTimeout(() => {
+        if (!window._decompTarget || !window._decompKnown) return;
+        const target = window._decompTarget;
+        const known = window._decompKnown;
+        if (known + num === target) {
+            totalScore++;
+            questionCount++;
+            updateScore();
+            blank.innerHTML += `
+                <div class=\"checkmark\" style=\"position: absolute; right: -8px; bottom: -8px; width: 24px; height: 24px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(76,205,196,0.3); z-index: 10;\">
+                    <svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"#4ecdc4\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"12 5 7 11 4 8\"></polyline></svg>
+                </div>
+            `;
+            blank.classList.add('flash');
+            document.getElementById('feedback').textContent = '太棒了！答对了！';
+            document.getElementById('feedback').className = 'feedback correct';
+            playSound('correct');
+            setTimeout(() => {
+                window._decompFilled = false;
+                window._decompTarget = null;
+                window._decompKnown = null;
+                window._decompAnswer = null;
+                renderQuestion();
+            }, 1200);
+        } else {
+            document.getElementById('feedback').textContent = '再试一次吧！';
+            document.getElementById('feedback').className = 'feedback incorrect';
+            playSound('wrong');
+            blank.classList.add('shake');
+            setTimeout(() => {
+                blank.innerHTML = `<span class='placeholder'>?</span>`;
+                blank.style.backgroundColor = '#f0f9ff';
+                blank.style.border = '2px dashed #4ecdc4';
+                blank.classList.remove('shake');
+                window._decompFilled = false;
+                document.querySelectorAll('.decomp-options .number-option').forEach(opt => {
+                    opt.classList.remove('used');
+                });
+                document.getElementById('feedback').textContent = '';
+                document.getElementById('feedback').className = 'feedback';
+            }, 800);
+        }
+    }, 300);
+}
+// 在renderQuestion中调用
+afterRenderDecomp = function() { enableTouchDragForDecomp(); }; 
