@@ -9,6 +9,49 @@ let questionHistory = [];
 let questionCount = 0;
 let soundEnabled = true;
 let errorCount = 0; // 记录错误次数，用于监控
+let isMobileDevice = false; // 移动设备标志
+let isLowEndDevice = false; // 低性能设备标志
+let cachedElements = {}; // 缓存常用DOM元素
+
+// 检测设备类型和性能
+function detectDevice() {
+    // 检测是否为移动设备
+    isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    // 性能检测
+    const startTime = performance.now();
+    let result = 0;
+    // 简单的性能测试
+    for (let i = 0; i < 1000000; i++) {
+        result += Math.random();
+    }
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    
+    // 如果性能测试耗时超过100ms，认为是低性能设备
+    isLowEndDevice = duration > 100 || isMobileDevice;
+    
+    console.log(`设备检测: 移动设备=${isMobileDevice}, 低性能设备=${isLowEndDevice}, 性能测试耗时=${duration.toFixed(2)}ms`);
+    
+    // 根据设备类型调整设置
+    if (isMobileDevice || isLowEndDevice) {
+        // 移动设备优化设置
+        soundEnabled = false; // 默认关闭声音，减少资源占用
+    }
+}
+
+// 缓存常用DOM元素
+function cacheElements() {
+    cachedElements = {
+        gameArea: document.getElementById('gameArea'),
+        gameContent: document.getElementById('gameContent'),
+        feedback: document.getElementById('feedback'),
+        totalScore: document.getElementById('totalScore'),
+        setupSection: document.getElementById('setupSection'),
+        minNumber: document.getElementById('minNumber'),
+        maxNumber: document.getElementById('maxNumber')
+    };
+}
 
 // 添加全局样式，防止文本选择
 document.addEventListener('DOMContentLoaded', function() {
@@ -21,6 +64,7 @@ document.addEventListener('DOMContentLoaded', function() {
             -moz-user-select: none !important;
             -ms-user-select: none !important;
             cursor: default !important;
+            -webkit-tap-highlight-color: transparent;
         }
         input, textarea {
             user-select: text !important;
@@ -29,19 +73,30 @@ document.addEventListener('DOMContentLoaded', function() {
             -ms-user-select: text !important;
             cursor: text !important;
         }
+        .container {
+            overscroll-behavior: contain;
+        }
     `;
     document.head.appendChild(style);
+    
+    // 设备检测
+    detectDevice();
+    
+    // 缓存DOM元素
+    cacheElements();
 });
 
-// 音效对象
-const sounds = {
-    correct: new Audio('sounds/correct.mp3'),
-    wrong: new Audio('sounds/wrong.mp3')
-    // 移除拖拽音效
-};
+// 音效对象 - 延迟创建，减少初始加载时间
+const sounds = {};
 
-// 预加载所有音效
+// 预加载所有音效 - 优化为按需加载
 function preloadSounds() {
+    if (!soundEnabled) return; // 如果声音禁用，不加载音效
+    
+    // 只有在需要时才创建音频对象
+    if (!sounds.correct) sounds.correct = new Audio('sounds/correct.mp3');
+    if (!sounds.wrong) sounds.wrong = new Audio('sounds/wrong.mp3');
+    
     for (const sound in sounds) {
         // 设置加载完成事件
         sounds[sound].addEventListener('canplaythrough', () => {
@@ -51,65 +106,80 @@ function preloadSounds() {
         // 设置错误处理
         sounds[sound].addEventListener('error', (e) => {
             console.error(`音效 ${sound} 加载失败:`, e);
+            soundEnabled = false; // 如果加载失败，禁用声音
         });
         
         // 加载音效
-        sounds[sound].load();
+        try {
+            sounds[sound].load();
+        } catch (e) {
+            console.error(`加载音效 ${sound} 时出错:`, e);
+            soundEnabled = false; // 出错时禁用声音
+        }
     }
 }
 
 // 播放音效
 function playSound(soundName) {
-    if (soundEnabled && sounds[soundName]) {
-        try {
-            // 重置音效播放位置，以便可以快速连续播放相同音效
-            sounds[soundName].currentTime = 0;
-            
-            // 确保声音已加载
-            if (sounds[soundName].readyState < 2) {
-                sounds[soundName].load();
-            }
-            
-            // 使用Promise处理播放
-            const playPromise = sounds[soundName].play();
-            
-            // 处理播放可能的错误
-            if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.warn("音频播放失败:", error);
-                    // 尝试重新加载并播放
-                    setTimeout(() => {
-                        sounds[soundName].load();
-                        sounds[soundName].play().catch(() => {});
-                    }, 100);
-                });
-            }
-        } catch (e) {
-            console.warn("播放音效时出错:", e);
+    if (!soundEnabled) return; // 如果声音禁用，直接返回
+    
+    // 如果音频对象不存在，先创建
+    if (!sounds[soundName]) {
+        sounds[soundName] = new Audio(`sounds/${soundName}.mp3`);
+    }
+    
+    try {
+        // 重置音效播放位置，以便可以快速连续播放相同音效
+        sounds[soundName].currentTime = 0;
+        
+        // 使用Promise处理播放
+        const playPromise = sounds[soundName].play();
+        
+        // 处理播放可能的错误
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.warn("音频播放失败:", error);
+                // 移动端可能需要用户交互才能播放音频，不再尝试重新加载
+                soundEnabled = false;
+            });
         }
+    } catch (e) {
+        console.warn("播放音效时出错:", e);
+        soundEnabled = false;
     }
 }
 
 // 页面加载后初始化
 window.onload = function() {
-    // 预加载音效
-    preloadSounds();
+    // 设备检测
+    detectDevice();
     
-    // 确保声音可以播放
-    document.addEventListener('click', function initAudio() {
-        // 尝试播放一个静音的音效来解锁音频
-        const unlockAudio = new Audio();
-        unlockAudio.play().then(() => {
-            console.log('音频已解锁');
-            // 重新加载所有音效
-            for (const sound in sounds) {
-                sounds[sound].load();
-            }
-        }).catch(() => {
-            console.log('音频未解锁，等待用户交互');
+    // 缓存DOM元素
+    cacheElements();
+    
+    // 在非低性能设备上预加载音效
+    if (!isLowEndDevice) {
+        preloadSounds();
+    }
+    
+    // 确保声音可以播放（仅在非移动设备上尝试）
+    if (!isMobileDevice) {
+        document.addEventListener('click', function initAudio() {
+            // 尝试播放一个静音的音效来解锁音频
+            const unlockAudio = new Audio();
+            unlockAudio.volume = 0.01; // 几乎无声
+            unlockAudio.play().then(() => {
+                console.log('音频已解锁');
+                // 重新加载所有音效
+                if (soundEnabled) {
+                    preloadSounds();
+                }
+            }).catch(() => {
+                console.log('音频未解锁，等待用户交互');
+            });
+            document.removeEventListener('click', initAudio);
         });
-        document.removeEventListener('click', initAudio);
-    });
+    }
     
     // 确保游戏类型只能是一眼识数或数的分解
     if (currentGameType !== 'quick-count' && currentGameType !== 'decomposition') {
@@ -140,6 +210,15 @@ window.onload = function() {
     // 绑定返回首页和重新开始
     document.getElementById('backHomeBtn').onclick = showSetupOnly;
     document.getElementById('restartBtn').onclick = startGame;
+    
+    // 添加移动端触摸优化
+    if (isMobileDevice) {
+        document.addEventListener('touchmove', function(e) {
+            if (e.target.tagName !== 'INPUT') {
+                e.preventDefault(); // 防止页面滚动
+            }
+        }, { passive: false });
+    }
 };
 
 function showSetupOnly() {
@@ -189,7 +268,7 @@ function startGame() {
         // 数的分解且非乱序模式，使用分解值
         const decompValue = parseInt(document.getElementById('decompValue').value);
         if (isNaN(decompValue) || decompValue < 2) {
-            alert('请输入有效的分解值！');
+            alert('请输入有效的目标数！');
             return;
         }
         // 在非乱序模式下，minNumber和maxNumber不重要，但为了保险设置一下
@@ -224,9 +303,13 @@ function startGame() {
     window._compTarget = null;
     window._compAnswer = null;
     
+    // 获取缓存的DOM元素或直接查询
+    const setupSection = cachedElements.setupSection || document.getElementById('setupSection');
+    const gameArea = cachedElements.gameArea || document.getElementById('gameArea');
+    
     // 显示游戏区域
-    document.getElementById('setupSection').style.display = 'none';
-    document.getElementById('gameArea').style.display = 'block';
+    if (setupSection) setupSection.style.display = 'none';
+    if (gameArea) gameArea.style.display = 'block';
     
     // 隐藏标题
     const titleElement = document.getElementById('game-title') || document.querySelector('h1, .title, header h1, .game-title');
@@ -234,11 +317,15 @@ function startGame() {
         titleElement.style.display = 'none';
     }
     
-    // 隐藏顶部空白横杠区域
+    // 隐藏顶部空白横杠区域 - 使用批量样式修改减少重绘
     const headerElements = document.querySelectorAll('header, .header-container, .top-bar, .app-header');
-    headerElements.forEach(el => {
-        el.style.display = 'none';
-    });
+    if (headerElements.length > 0) {
+        const fragment = document.createDocumentFragment();
+        headerElements.forEach(el => {
+            el.style.display = 'none';
+            fragment.appendChild(el.cloneNode(false)); // 只克隆节点本身，不克隆子节点
+        });
+    }
     
     // 隐藏已标记的顶部横杠
     const topBar = document.getElementById('top-bar');
@@ -246,8 +333,9 @@ function startGame() {
         topBar.style.display = 'none';
     } else {
         // 如果没有找到已标记的元素，尝试查找并隐藏第一个顶部白色容器
+        // 使用更高效的查询方式
         const topContainers = document.querySelectorAll('.container, .card, .panel, .box');
-        for (let i = 0; i < topContainers.length; i++) {
+        for (let i = 0; i < Math.min(topContainers.length, 5); i++) { // 只检查前5个元素
             const rect = topContainers[i].getBoundingClientRect();
             // 如果元素在页面顶部且宽度接近页面宽度，可能是顶部横杠
             if (rect.top < 50 && rect.width > window.innerWidth * 0.8) {
@@ -257,38 +345,61 @@ function startGame() {
         }
     }
     
-    // 重新创建游戏界面，使其与图2一致
-    const gameArea = document.getElementById('gameArea');
-    gameArea.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; margin-bottom: 20px;">
-            <div style="display: flex; align-items: center;">
-                <div style="display: flex; align-items: center; margin-right: 20px;">
-                    <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2ZmNmI2YiIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij48cGF0aCBkPSJNMTIgMkM2LjUgMiAyIDYuNSAyIDEyczQuNSAxMCAxMCAxMCAxMC00LjUgMTAtMTBTMTcuNSAyIDEyIDJ6bTAgMThjLTQuNDEgMC04LTMuNTktOC04czMuNTktOCA4LTggOCAzLjU5IDggOC0zLjU5IDgtOCA4em0uNS03djVoLTF2LTZoNHYxaC0zeiIvPjwvc3ZnPg==" style="width: 28px; height: 28px; margin-right: 5px;">
-                    <span style="color: #ff6b6b; font-size: 2.5em; font-weight: bold;">60</span>
-                </div>
-                <div style="display: flex; align-items: center;">
-                    <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2ZmYzEwNyIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij48cGF0aCBkPSJNMTkgOWwtMS40Mi0xLjQyTDEyIDE0LjE3bC01LjU4LTUuNTlMNSA5bDcgN3oiLz48cGF0aCBkPSJNMTkgNWgtNFYzSDl2Mkg1Yy0xLjEgMC0yIC45LTIgMnYxNGMwIDEuMS45IDIgMiAyaDE0YzEuMSAwIDItLjkgMi0yVjdjMC0xLjEtLjktMi0yLTJ6bTAgMTZINVY3aDE0djE0eiIvPjwvc3ZnPg==" style="width: 28px; height: 28px; margin-right: 5px;">
-                    <span style="color: #4ecdc4; font-size: 2.5em; font-weight: bold;" id="totalScore">0</span>
-                </div>
+    // 重新创建游戏界面，使用DocumentFragment减少DOM操作
+    if (gameArea) {
+        const fragment = document.createDocumentFragment();
+        
+        // 创建游戏工具栏
+        const toolbar = document.createElement('div');
+        toolbar.className = 'game-toolbar';
+        toolbar.innerHTML = `
+            <div class="game-info">
+                <span class="timer" id="timeLeft">⏱ 60</span>
+                <span class="score">🏆<span id="totalScore">0</span></span>
             </div>
-            <div style="display: flex; gap: 10px;">
-                <button id="restartBtn" style="background-color: #4ecdc4; color: white; border: none; border-radius: 20px; padding: 8px 20px; font-size: 1em; cursor: pointer;">重新开始</button>
-                <button id="backHomeBtn" style="background-color: #ff6b6b; color: white; border: none; border-radius: 20px; padding: 8px 20px; font-size: 1em; cursor: pointer;">返回首页</button>
+            <div class="game-actions">
+                <button id="restartBtn" class="toolbar-btn restart-btn">重新开始</button>
+                <button id="backHomeBtn" class="toolbar-btn home-btn">返回首页</button>
             </div>
-        </div>
-        <div id="gameContent"></div>
-        <div id="feedback" class="feedback"></div>
-    `;
+        `;
+        fragment.appendChild(toolbar);
+        
+        // 创建游戏内容区域
+        const gameContent = document.createElement('div');
+        gameContent.id = 'gameContent';
+        fragment.appendChild(gameContent);
+        
+        // 创建反馈区域
+        const feedback = document.createElement('div');
+        feedback.id = 'feedback';
+        feedback.className = 'feedback';
+        fragment.appendChild(feedback);
+        
+        // 一次性更新DOM
+        gameArea.innerHTML = '';
+        gameArea.appendChild(fragment);
+        
+        // 更新缓存的元素
+        cachedElements.gameContent = gameContent;
+        cachedElements.feedback = feedback;
+        cachedElements.totalScore = document.getElementById('totalScore');
+    }
     
     // 绑定顶部按钮事件
-    document.getElementById('restartBtn').onclick = startGame;
-    document.getElementById('backHomeBtn').onclick = showSetupOnly;
+    const restartBtn = document.getElementById('restartBtn');
+    const backHomeBtn = document.getElementById('backHomeBtn');
+    if (restartBtn) restartBtn.onclick = startGame;
+    if (backHomeBtn) backHomeBtn.onclick = showSetupOnly;
     
     updateScore();
     updateTimer();
     clearInterval(timer);
     startTimer();
-    renderQuestion();
+    
+    // 使用requestAnimationFrame确保在下一帧渲染问题，避免阻塞UI
+    requestAnimationFrame(() => {
+        renderQuestion();
+    });
 }
 
 function startTimer() {
@@ -386,31 +497,46 @@ function renderQuestion() {
     try {
         resetGameState(); // 每次渲染前重置状态
         
-        const gameContent = document.getElementById('gameContent');
+        const gameContent = cachedElements.gameContent || document.getElementById('gameContent');
         if (!gameContent) return;
         
-        gameContent.innerHTML = '';
+        // 使用DocumentFragment减少DOM操作
+        const fragment = document.createDocumentFragment();
+        let contentHTML = '';
+        
         switch (currentGameType) {
             case 'quick-count':
-                genQuickCount();
+                contentHTML = genQuickCount();
                 break;
             case 'decomposition':
-                genDecomposition();
+                contentHTML = genDecomposition();
                 break;
             default:
                 // 默认使用一眼识数
                 currentGameType = 'quick-count';
-                genQuickCount();
+                contentHTML = genQuickCount();
                 break;
         }
-        document.getElementById('feedback').textContent = '';
+        
+        // 一次性更新DOM
+        gameContent.innerHTML = contentHTML;
+        
+        const feedback = cachedElements.feedback || document.getElementById('feedback');
+        if (feedback) feedback.textContent = '';
         
         // 在渲染完成后设置拖拽事件
-        setTimeout(setupDragEvents, 100);
+        // 使用requestIdleCallback或setTimeout来延迟非关键任务
+        if (window.requestIdleCallback) {
+            requestIdleCallback(() => {
+                setupDragEvents();
+            });
+        } else {
+            setTimeout(setupDragEvents, 50);
+        }
     } catch (error) {
         console.error("渲染题目时出错:", error);
         // 如果出错，提供一个简单的恢复选项
-        const gameContent = document.getElementById('gameContent');
+        const gameContent = cachedElements.gameContent || document.getElementById('gameContent');
         if (gameContent) {
             gameContent.innerHTML = `
                 <div class="error-recovery">
@@ -425,39 +551,26 @@ function renderQuestion() {
 
 function genQuickCount() {
     // 检查是否有正在进行的题目
+    let count;
     if (window._currentQuickCountQuestion) {
         // 如果有，直接使用当前题目的值
-        const count = window._currentQuickCountQuestion;
+        count = window._currentQuickCountQuestion;
+    } else {
+        // 生成新题目
+        let tryCount = 0;
+        do {
+            count = getRandomNumber(minNumber, maxNumber);
+            tryCount++;
+            if (tryCount > 20) break;
+        } while (isQuestionRepeated(count));
         
-        const gameContent = document.getElementById('gameContent');
-        gameContent.innerHTML = `
-            <div class="circle-container" style="position: relative; width: 300px; height: 300px; margin: 0 auto;">
-                ${generateRandomCircles(count)}
-            </div>
-            <div class="options-container">
-                ${generateOptions(count, 4).map(num => 
-                    `<button class="option-button" onclick="checkAnswer(${num}, ${count})">${num}</button>`
-                ).join('')}
-            </div>
-        `;
-        return;
+        // 保存当前题目
+        window._currentQuickCountQuestion = count;
+        addToHistory(count);
     }
     
-    // 生成新题目
-    let count;
-    let tryCount = 0;
-    do {
-        count = getRandomNumber(minNumber, maxNumber);
-        tryCount++;
-        if (tryCount > 20) break;
-    } while (isQuestionRepeated(count));
-    
-    // 保存当前题目
-    window._currentQuickCountQuestion = count;
-    
-    addToHistory(count);
-    const gameContent = document.getElementById('gameContent');
-    gameContent.innerHTML = `
+    // 返回HTML字符串而不是直接修改DOM
+    return `
         <div class="circle-container" style="position: relative; width: 300px; height: 300px; margin: 0 auto;">
             ${generateRandomCircles(count)}
         </div>
@@ -469,72 +582,57 @@ function genQuickCount() {
     `;
 }
 
-// 生成随机位置、颜色和大小的小球
+// 生成随机位置、颜色和大小的小球 - 优化版本
 function generateRandomCircles(count) {
+    // 移动端或低性能设备使用更简单的布局和更少的视觉效果
+    const useSimpleLayout = isMobileDevice || isLowEndDevice;
+    
     // 颜色数组，可以根据需要调整
-    const colors = [
-        '#FF6B6B', '#4ECDC4', '#FFD166', '#06D6A0', '#118AB2', 
-        '#EF476F', '#FFC43D', '#1B9AAA', '#6A4C93', '#F15BB5'
-    ];
+    const colors = useSimpleLayout ? 
+        ['#4ecdc4', '#ff6b6b'] : // 简化版本只使用两种颜色
+        ['#FF6B6B', '#4ECDC4', '#FFD166', '#06D6A0', '#118AB2', 
+         '#EF476F', '#FFC43D', '#1B9AAA', '#6A4C93', '#F15BB5'];
     
     let circles = '';
     
     // 为避免重叠，将容器划分为网格
-    const gridSize = Math.ceil(Math.sqrt(count * 2)); // 网格数量是小球数量的2倍，确保有足够空间
+    const gridSize = Math.ceil(Math.sqrt(count * 1.5)); // 网格数量是小球数量的1.5倍，确保有足够空间
     const cellSize = 300 / gridSize; // 每个网格的大小
     
-    // 已使用的网格位置
-    const usedPositions = new Set();
+    // 预先计算所有位置，避免在循环中重复计算
+    const positions = [];
+    for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+            positions.push({
+                x: i * cellSize + (Math.random() * cellSize * 0.6),
+                y: j * cellSize + (Math.random() * cellSize * 0.6)
+            });
+        }
+    }
     
+    // 随机打乱位置数组
+    positions.sort(() => Math.random() - 0.5);
+    
+    // 使用前count个位置
     for (let i = 0; i < count; i++) {
-        // 尝试找到一个未使用的位置
-        let gridX, gridY, attempts = 0;
-        do {
-            gridX = Math.floor(Math.random() * gridSize);
-            gridY = Math.floor(Math.random() * gridSize);
-            attempts++;
-            // 如果尝试了很多次还找不到位置，就放宽条件
-            if (attempts > 50) break;
-        } while (usedPositions.has(`${gridX},${gridY}`));
+        const pos = positions[i];
         
-        // 标记此位置已使用
-        usedPositions.add(`${gridX},${gridY}`);
+        // 简化版本使用固定大小，减少计算和渲染负担
+        const size = useSimpleLayout ? 36 : 36 + (Math.random() * 8 - 4);
         
-        // 在网格内随机偏移，使小球位置看起来更自然
-        const offsetX = Math.random() * (cellSize * 0.6);
-        const offsetY = Math.random() * (cellSize * 0.6);
+        // 简化版本使用交替颜色，减少随机数生成
+        const color = useSimpleLayout ? 
+            colors[i % colors.length] : 
+            colors[Math.floor(Math.random() * colors.length)];
         
-        // 计算小球在容器中的实际位置
-        const x = gridX * cellSize + offsetX;
-        const y = gridY * cellSize + offsetY;
-        
-        // 随机大小，基础大小为36px，随机变化范围±4px
-        const size = 36 + (Math.random() * 8 - 4);
-        
-        // 随机选择颜色
-        const color = colors[Math.floor(Math.random() * colors.length)];
-        
-        // 生成小球HTML
-        circles += `
-            <div class="circle" style="
-                position: absolute;
-                left: ${x}px;
-                top: ${y}px;
-                width: ${size}px;
-                height: ${size}px;
-                background-color: ${color};
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            "></div>
-        `;
+        // 生成小球HTML - 简化样式属性
+        circles += `<div class="circle" style="position:absolute;left:${pos.x}px;top:${pos.y}px;width:${size}px;height:${size}px;background-color:${color};border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>`;
     }
     
     return circles;
 }
 
+// 修改genDecomposition函数，返回HTML字符串而不是直接操作DOM
 function genDecomposition() {
     // 重置全局变量，防止旧数据干扰
     window._decompTarget = null;
@@ -609,51 +707,44 @@ function genDecomposition() {
         options = Array.from(options).sort(() => Math.random() - 0.5);
     }
     
-    // 渲染到界面
-    try {
-        const gameContent = document.getElementById('gameContent');
-        if (!gameContent) return;
-        
-        gameContent.innerHTML = `
-            <div class="decomp-container">
-                <div class="target-number" style="font-size: 3.2em; background-color: #f0f9ff; padding: 10px 40px; box-shadow: 0 4px 10px rgba(76,205,196,0.2); margin-bottom: 20px; user-select: none;">${target}</div>
-                <div class="decomp-triangle" style="position: relative; width: 260px; height: 200px; margin: 0;">
-                    <svg width="260" height="130" viewBox="0 0 260 130" style="position: absolute; top: 0;">
-                        <line x1="130" y1="10" x2="40" y2="80" stroke="#4ecdc4" stroke-width="3"/>
-                        <line x1="130" y1="10" x2="220" y2="80" stroke="#4ecdc4" stroke-width="3"/>
-                    </svg>
-                    <div class="decomp-numbers" style="display: flex; justify-content: space-between; padding: 0; position: absolute; bottom: 0; left: 0; right: 0; width: 260px;">
-                        <div class="decomp-known" style="margin-left: 10px; width: 70px; height: 70px; background-color: #f0f9ff; border: 2px solid #4ecdc4; font-size: 2.2em; display: flex; align-items: center; justify-content: center; border-radius: 12px; user-select: none;">${knownNum}</div>
-                        <div class="decomp-blank" id="decompBlank" ondragover="event.preventDefault()" ondrop="dropDecomp(event)" style="margin-right: 10px; width: 70px; height: 70px; background-color: #f0f9ff; border: 2px dashed #4ecdc4; font-size: 2.2em; display: flex; align-items: center; justify-content: center; border-radius: 12px; position: relative; user-select: none;">
-                            <span class="placeholder" style="user-select: none; font-size: 0.8em; color: #888;">?</span>
-                        </div>
+    // 保存答案数据
+    window._decompAnswer = answer;
+    window._decompKnown = knownNum;
+    window._decompTarget = target;
+    window._decompFilled = false;
+    
+    console.log(`生成分解题目: ${target} = ${knownNum} + ${answer}`);
+    
+    // 返回HTML字符串
+    const html = `
+        <div class="decomp-container">
+            <div class="target-number" style="font-size: 3.2em; background-color: #f0f9ff; padding: 10px 40px; box-shadow: 0 4px 10px rgba(76,205,196,0.2); margin-bottom: 20px; user-select: none;">${target}</div>
+            <div class="decomp-triangle" style="position: relative; width: 260px; height: 200px; margin: 0;">
+                <svg width="260" height="130" viewBox="0 0 260 130" style="position: absolute; top: 0;">
+                    <line x1="130" y1="10" x2="40" y2="80" stroke="#4ecdc4" stroke-width="3"/>
+                    <line x1="130" y1="10" x2="220" y2="80" stroke="#4ecdc4" stroke-width="3"/>
+                </svg>
+                <div class="decomp-numbers" style="display: flex; justify-content: space-between; padding: 0; position: absolute; bottom: 0; left: 0; right: 0; width: 260px;">
+                    <div class="decomp-known" style="margin-left: 10px; width: 70px; height: 70px; background-color: #f0f9ff; border: 2px solid #4ecdc4; font-size: 2.2em; display: flex; align-items: center; justify-content: center; border-radius: 12px; user-select: none;">${knownNum}</div>
+                    <div class="decomp-blank" id="decompBlank" ondragover="event.preventDefault()" ondrop="dropDecomp(event)" style="margin-right: 10px; width: 70px; height: 70px; background-color: #f0f9ff; border: 2px dashed #4ecdc4; font-size: 2.2em; display: flex; align-items: center; justify-content: center; border-radius: 12px; position: relative; user-select: none;">
+                        <span class="placeholder" style="user-select: none; font-size: 0.8em; color: #888;">?</span>
                     </div>
                 </div>
-                <div class="decomp-options" style="margin-top: 30px;">
-                    ${options.map(num => `
-                        <div class="number-option" draggable="true" ondragstart="dragDecomp(event,${num})" style="background-color: #4ecdc4; color: white; width: 70px; height: 70px; font-size: 2.2em; display: flex; align-items: center; justify-content: center; border-radius: 12px; user-select: none;">${num}</div>
-                    `).join('')}
-                </div>
             </div>
-        `;
-        
-        // 保存答案数据
-        window._decompAnswer = answer;
-        window._decompKnown = knownNum;
-        window._decompTarget = target;
-        window._decompFilled = false;
-        
-        console.log(`生成分解题目: ${target} = ${knownNum} + ${answer}`);
-        
+            <div class="decomp-options" style="margin-top: 30px;">
+                ${options.map(num => `
+                    <div class="number-option" draggable="true" ondragstart="dragDecomp(event,${num})" style="background-color: #4ecdc4; color: white; width: 70px; height: 70px; font-size: 2.2em; display: flex; align-items: center; justify-content: center; border-radius: 12px; user-select: none;">${num}</div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    
+    // 在下一帧设置触摸拖拽支持
+    setTimeout(() => {
         if(window.afterRenderDecomp) window.afterRenderDecomp();
-    } catch (error) {
-        console.error("生成分解题目错误:", error);
-        // 如果生成题目出错，提供一个备用的简单题目
-        const gameContent = document.getElementById('gameContent');
-        if (gameContent) {
-            gameContent.innerHTML = `<div class="error-message">加载题目时出错，请重新开始游戏</div>`;
-        }
-    }
+    }, 0);
+    
+    return html;
 }
 
 window.dragDecomp = function(event, num) {

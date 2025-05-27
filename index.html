@@ -2,11 +2,65 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#f0f9ff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no">
     <title>趣味数学 - 幼儿园数学学习</title>
+    <!-- 预加载关键资源 -->
+    <link rel="preload" href="styles.css" as="style">
+    <link rel="preload" href="script.js" as="script">
+    <link rel="preload" href="sounds/correct.mp3" as="audio">
+    <link rel="preload" href="sounds/wrong.mp3" as="audio">
     <link rel="stylesheet" href="styles.css">
+    <!-- 添加启动画面样式，减少白屏时间 -->
+    <style>
+        .app-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f0f9ff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+        .loader-content {
+            text-align: center;
+        }
+        .loader-title {
+            color: #ff6b6b;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+        .loader-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(76, 205, 196, 0.3);
+            border-radius: 50%;
+            border-top-color: #4ecdc4;
+            animation: spin 1s ease-in-out infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
+    <!-- 添加启动画面，减少白屏感知 -->
+    <div class="app-loader" id="appLoader">
+        <div class="loader-content">
+            <div class="loader-title">趣味数学</div>
+            <div class="loader-spinner"></div>
+        </div>
+    </div>
+
     <div class="container">
         <header>
             <h1>趣味数学</h1>
@@ -26,7 +80,7 @@
                     <input type="number" id="maxNumber" value="5" min="2" max="100">
                 </div>
                 <div class="setup-group" id="decompValueGroup" style="display:none;">
-                    <label for="decompValue">分解值：</label>
+                    <label for="decompValue">目标值：</label>
                     <input type="number" id="decompValue" value="5" min="2" max="100">
                 </div>
                 <div class="setup-group" id="decompRandomGroup" style="display:none;">
@@ -57,7 +111,7 @@
             </section>
         </main>
     </div>
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
     <script>
     // 页面加载后初始化
     window.addEventListener('DOMContentLoaded', function() {
@@ -97,6 +151,17 @@
         if (currentGameType === 'decomposition') {
             updateDecompSettings();
         }
+        
+        // 隐藏加载画面
+        setTimeout(function() {
+            const loader = document.getElementById('appLoader');
+            if (loader) {
+                loader.style.opacity = '0';
+                setTimeout(function() {
+                    loader.style.display = 'none';
+                }, 300);
+            }
+        }, 500);
     });
     
     // 更新数的分解游戏设置项显示
