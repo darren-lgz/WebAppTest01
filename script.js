@@ -7,17 +7,14 @@ let maxNumber = 5;
 let currentGameType = 'quick-count'; // 默认为一眼识数
 let questionHistory = [];
 let questionCount = 0;
-let soundEnabled = true;
+let soundEnabled = false; // 默认关闭声音
 let errorCount = 0; // 记录错误次数，用于监控
-let isMobileDevice = false; // 移动设备标志
+let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 let isLowEndDevice = false; // 低性能设备标志
 let cachedElements = {}; // 缓存常用DOM元素
 
 // 检测设备类型和性能
 function detectDevice() {
-    // 检测是否为移动设备
-    isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
     // 性能检测
     const startTime = performance.now();
     let result = 0;
@@ -49,7 +46,11 @@ function cacheElements() {
         totalScore: document.getElementById('totalScore'),
         setupSection: document.getElementById('setupSection'),
         minNumber: document.getElementById('minNumber'),
-        maxNumber: document.getElementById('maxNumber')
+        maxNumber: document.getElementById('maxNumber'),
+        startBtn: document.getElementById('startBtn'),
+        backHomeBtn: document.getElementById('backHomeBtn'),
+        restartBtn: document.getElementById('restartBtn'),
+        timeLeft: document.getElementById('timeLeft')
     };
 }
 
@@ -89,145 +90,82 @@ document.addEventListener('DOMContentLoaded', function() {
 // 音效对象 - 延迟创建，减少初始加载时间
 const sounds = {};
 
-// 预加载所有音效 - 优化为按需加载
-function preloadSounds() {
-    if (!soundEnabled) return; // 如果声音禁用，不加载音效
+// 按需加载音效
+function loadSound(soundName) {
+    if (!soundEnabled) return null;
     
-    // 只有在需要时才创建音频对象
-    if (!sounds.correct) sounds.correct = new Audio('sounds/correct.mp3');
-    if (!sounds.wrong) sounds.wrong = new Audio('sounds/wrong.mp3');
-    
-    for (const sound in sounds) {
-        // 设置加载完成事件
-        sounds[sound].addEventListener('canplaythrough', () => {
-            console.log(`音效 ${sound} 已加载完成`);
-        }, { once: true });
-        
-        // 设置错误处理
-        sounds[sound].addEventListener('error', (e) => {
-            console.error(`音效 ${sound} 加载失败:`, e);
-            soundEnabled = false; // 如果加载失败，禁用声音
+    if (!sounds[soundName]) {
+        sounds[soundName] = new Audio(`sounds/${soundName}.mp3`);
+        sounds[soundName].addEventListener('error', () => {
+            soundEnabled = false;
         });
-        
-        // 加载音效
-        try {
-            sounds[sound].load();
-        } catch (e) {
-            console.error(`加载音效 ${sound} 时出错:`, e);
-            soundEnabled = false; // 出错时禁用声音
-        }
     }
+    return sounds[soundName];
 }
 
 // 播放音效
 function playSound(soundName) {
-    if (!soundEnabled) return; // 如果声音禁用，直接返回
+    if (!soundEnabled) return;
     
-    // 如果音频对象不存在，先创建
-    if (!sounds[soundName]) {
-        sounds[soundName] = new Audio(`sounds/${soundName}.mp3`);
-    }
-    
-    try {
-        // 重置音效播放位置，以便可以快速连续播放相同音效
-        sounds[soundName].currentTime = 0;
-        
-        // 使用Promise处理播放
-        const playPromise = sounds[soundName].play();
-        
-        // 处理播放可能的错误
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.warn("音频播放失败:", error);
-                // 移动端可能需要用户交互才能播放音频，不再尝试重新加载
+    const sound = loadSound(soundName);
+    if (sound) {
+        try {
+            sound.currentTime = 0;
+            sound.play().catch(() => {
                 soundEnabled = false;
             });
+        } catch (e) {
+            soundEnabled = false;
         }
-    } catch (e) {
-        console.warn("播放音效时出错:", e);
-        soundEnabled = false;
     }
 }
 
 // 页面加载后初始化
-window.onload = function() {
-    // 设备检测
-    detectDevice();
-    
+window.addEventListener('DOMContentLoaded', function() {
     // 缓存DOM元素
     cacheElements();
     
-    // 在非低性能设备上预加载音效
-    if (!isLowEndDevice) {
-        preloadSounds();
-    }
-    
-    // 确保声音可以播放（仅在非移动设备上尝试）
-    if (!isMobileDevice) {
-        document.addEventListener('click', function initAudio() {
-            // 尝试播放一个静音的音效来解锁音频
-            const unlockAudio = new Audio();
-            unlockAudio.volume = 0.01; // 几乎无声
-            unlockAudio.play().then(() => {
-                console.log('音频已解锁');
-                // 重新加载所有音效
-                if (soundEnabled) {
-                    preloadSounds();
-                }
-            }).catch(() => {
-                console.log('音频未解锁，等待用户交互');
-            });
-            document.removeEventListener('click', initAudio);
-        });
-    }
-    
-    // 确保游戏类型只能是一眼识数或数的分解
-    if (currentGameType !== 'quick-count' && currentGameType !== 'decomposition') {
-        currentGameType = 'quick-count';
-    }
-    
-    // 给标题添加id
-    const titleElements = document.querySelectorAll('h1, .title');
-    titleElements.forEach(el => {
-        if (el.textContent.includes('数学') || el.textContent.includes('趣味')) {
-            el.id = 'game-title';
+    // 防止移动端页面滚动
+    document.body.addEventListener('touchmove', function(e) {
+        if (e.target.tagName !== 'INPUT') {
+            e.preventDefault();
         }
-    });
+    }, { passive: false });
     
-    // 给顶部空白横杠添加ID
-    const topContainers = document.querySelectorAll('.container, .card, .panel, .box');
-    for (let i = 0; i < topContainers.length; i++) {
-        const rect = topContainers[i].getBoundingClientRect();
-        // 如果元素在页面顶部且宽度接近页面宽度，可能是顶部横杠
-        if (rect.top < 50 && rect.width > window.innerWidth * 0.8 && !topContainers[i].id) {
-            topContainers[i].id = 'top-bar';
-            break;
+    // 绑定事件处理
+    cachedElements.startBtn.addEventListener('click', startGame);
+    cachedElements.backHomeBtn.addEventListener('click', showSetupOnly);
+    cachedElements.restartBtn.addEventListener('click', startGame);
+    
+    // 添加全局样式
+    const style = document.createElement('style');
+    style.textContent = `
+        * {
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -webkit-tap-highlight-color: transparent;
         }
-    }
-    
-    // 绑定开始游戏按钮
-    document.getElementById('startBtn').onclick = startGame;
-    // 绑定返回首页和重新开始
-    document.getElementById('backHomeBtn').onclick = showSetupOnly;
-    document.getElementById('restartBtn').onclick = startGame;
-    
-    // 添加移动端触摸优化
-    if (isMobileDevice) {
-        document.addEventListener('touchmove', function(e) {
-            if (e.target.tagName !== 'INPUT') {
-                e.preventDefault(); // 防止页面滚动
-            }
-        }, { passive: false });
-    }
-};
+        input {
+            user-select: text !important;
+            -webkit-user-select: text !important;
+        }
+    `;
+    document.head.appendChild(style);
+});
 
 function showSetupOnly() {
-    // 显示设置区域，隐藏游戏区域
-    document.getElementById('setupSection').style.display = 'flex';
-    document.getElementById('gameArea').style.display = 'none';
+    // 停止计时器
+    if (timer) {
+        clearInterval(timer);
+        timer = null;
+    }
     
-    // 清除计时器
-    clearInterval(timer);
+    // 重置游戏状态
+    resetGameState();
+    
+    // 显示设置区域，隐藏游戏区域
+    cachedElements.setupSection.style.display = 'block';
+    cachedElements.gameArea.style.display = 'none';
     
     // 显示标题（如果之前被隐藏）
     const titleElement = document.getElementById('game-title') || document.querySelector('h1, .title, header h1, .game-title');
@@ -263,143 +201,31 @@ function showSetupOnly() {
 }
 
 function startGame() {
-    // 根据游戏类型和设置获取数值范围
-    if (currentGameType === 'decomposition' && !document.getElementById('decompRandom').checked) {
-        // 数的分解且非乱序模式，使用分解值
-        const decompValue = parseInt(document.getElementById('decompValue').value);
-        if (isNaN(decompValue) || decompValue < 2) {
-            alert('请输入有效的目标数！');
-            return;
-        }
-        // 在非乱序模式下，minNumber和maxNumber不重要，但为了保险设置一下
-        minNumber = 1;
-        maxNumber = decompValue;
-    } else {
-        // 其他游戏或乱序模式，使用最小值和最大值
-        minNumber = parseInt(document.getElementById('minNumber').value);
-        maxNumber = parseInt(document.getElementById('maxNumber').value);
-        if (isNaN(minNumber) || isNaN(maxNumber) || minNumber < 1 || maxNumber < minNumber) {
-            alert('请输入有效的最小数和最大数！');
-            return;
-        }
+    // 获取游戏设置
+    minNumber = parseInt(cachedElements.minNumber.value);
+    maxNumber = parseInt(cachedElements.maxNumber.value);
+    
+    // 确保最小值不大于最大值
+    if (minNumber > maxNumber) {
+        const temp = minNumber;
+        minNumber = maxNumber;
+        maxNumber = temp;
+        cachedElements.minNumber.value = minNumber;
+        cachedElements.maxNumber.value = maxNumber;
     }
     
-    // 重置游戏数据
-    totalScore = 0;
-    questionCount = 0;
-    timeLeft = 60;
-    questionHistory = [];
+    // 重置游戏状态
+    resetGameState();
     
-    // 清除当前进行中的题目
-    window._currentQuickCountQuestion = null;
+    // 隐藏设置区域，显示游戏区域
+    cachedElements.setupSection.style.display = 'none';
+    cachedElements.gameArea.style.display = 'block';
     
-    // 清除上一次游戏的历史数据
-    window._lastDecompTarget = null;
-    window._decompFilled = false;
-    window._decompTarget = null;
-    window._decompKnown = null;
-    window._decompAnswer = null;
-    window._compFilled = [null, null];
-    window._compTarget = null;
-    window._compAnswer = null;
+    // 渲染第一个问题
+    renderQuestion();
     
-    // 获取缓存的DOM元素或直接查询
-    const setupSection = cachedElements.setupSection || document.getElementById('setupSection');
-    const gameArea = cachedElements.gameArea || document.getElementById('gameArea');
-    
-    // 显示游戏区域
-    if (setupSection) setupSection.style.display = 'none';
-    if (gameArea) gameArea.style.display = 'block';
-    
-    // 隐藏标题
-    const titleElement = document.getElementById('game-title') || document.querySelector('h1, .title, header h1, .game-title');
-    if (titleElement) {
-        titleElement.style.display = 'none';
-    }
-    
-    // 隐藏顶部空白横杠区域 - 使用批量样式修改减少重绘
-    const headerElements = document.querySelectorAll('header, .header-container, .top-bar, .app-header');
-    if (headerElements.length > 0) {
-        const fragment = document.createDocumentFragment();
-        headerElements.forEach(el => {
-            el.style.display = 'none';
-            fragment.appendChild(el.cloneNode(false)); // 只克隆节点本身，不克隆子节点
-        });
-    }
-    
-    // 隐藏已标记的顶部横杠
-    const topBar = document.getElementById('top-bar');
-    if (topBar) {
-        topBar.style.display = 'none';
-    } else {
-        // 如果没有找到已标记的元素，尝试查找并隐藏第一个顶部白色容器
-        // 使用更高效的查询方式
-        const topContainers = document.querySelectorAll('.container, .card, .panel, .box');
-        for (let i = 0; i < Math.min(topContainers.length, 5); i++) { // 只检查前5个元素
-            const rect = topContainers[i].getBoundingClientRect();
-            // 如果元素在页面顶部且宽度接近页面宽度，可能是顶部横杠
-            if (rect.top < 50 && rect.width > window.innerWidth * 0.8) {
-                topContainers[i].style.display = 'none';
-                break; // 只隐藏第一个符合条件的元素
-            }
-        }
-    }
-    
-    // 重新创建游戏界面，使用DocumentFragment减少DOM操作
-    if (gameArea) {
-        const fragment = document.createDocumentFragment();
-        
-        // 创建游戏工具栏
-        const toolbar = document.createElement('div');
-        toolbar.className = 'game-toolbar';
-        toolbar.innerHTML = `
-            <div class="game-info">
-                <span class="timer" id="timeLeft">⏱ 60</span>
-                <span class="score">🏆<span id="totalScore">0</span></span>
-            </div>
-            <div class="game-actions">
-                <button id="restartBtn" class="toolbar-btn restart-btn">重新开始</button>
-                <button id="backHomeBtn" class="toolbar-btn home-btn">返回首页</button>
-            </div>
-        `;
-        fragment.appendChild(toolbar);
-        
-        // 创建游戏内容区域
-        const gameContent = document.createElement('div');
-        gameContent.id = 'gameContent';
-        fragment.appendChild(gameContent);
-        
-        // 创建反馈区域
-        const feedback = document.createElement('div');
-        feedback.id = 'feedback';
-        feedback.className = 'feedback';
-        fragment.appendChild(feedback);
-        
-        // 一次性更新DOM
-        gameArea.innerHTML = '';
-        gameArea.appendChild(fragment);
-        
-        // 更新缓存的元素
-        cachedElements.gameContent = gameContent;
-        cachedElements.feedback = feedback;
-        cachedElements.totalScore = document.getElementById('totalScore');
-    }
-    
-    // 绑定顶部按钮事件
-    const restartBtn = document.getElementById('restartBtn');
-    const backHomeBtn = document.getElementById('backHomeBtn');
-    if (restartBtn) restartBtn.onclick = startGame;
-    if (backHomeBtn) backHomeBtn.onclick = showSetupOnly;
-    
-    updateScore();
-    updateTimer();
-    clearInterval(timer);
+    // 启动计时器
     startTimer();
-    
-    // 使用requestAnimationFrame确保在下一帧渲染问题，避免阻塞UI
-    requestAnimationFrame(() => {
-        renderQuestion();
-    });
 }
 
 function startTimer() {
@@ -584,52 +410,76 @@ function genQuickCount() {
 
 // 生成随机位置、颜色和大小的小球 - 优化版本
 function generateRandomCircles(count) {
-    // 移动端或低性能设备使用更简单的布局和更少的视觉效果
-    const useSimpleLayout = isMobileDevice || isLowEndDevice;
+    const fragment = document.createDocumentFragment();
+    const container = document.createElement('div');
+    container.className = 'circle-container';
     
-    // 颜色数组，可以根据需要调整
-    const colors = useSimpleLayout ? 
-        ['#4ecdc4', '#ff6b6b'] : // 简化版本只使用两种颜色
-        ['#FF6B6B', '#4ECDC4', '#FFD166', '#06D6A0', '#118AB2', 
-         '#EF476F', '#FFC43D', '#1B9AAA', '#6A4C93', '#F15BB5'];
+    // 预定义颜色数组
+    const colors = [
+        '#FF6B6B', '#4ECDC4', '#FFD166', '#06D6A0', '#118AB2', 
+        '#073B4C', '#EF476F', '#FFC43D', '#1B9AAA', '#6A4C93'
+    ];
     
-    let circles = '';
+    // 计算合适的容器尺寸
+    const containerSize = isMobileDevice ? 280 : 320;
+    const baseSize = 36; // 基础圆圈大小
+    const sizeVariation = 4; // 大小变化范围
+    const minDistance = baseSize * 0.8; // 最小距离要求
     
-    // 为避免重叠，将容器划分为网格
-    const gridSize = Math.ceil(Math.sqrt(count * 1.5)); // 网格数量是小球数量的1.5倍，确保有足够空间
-    const cellSize = 300 / gridSize; // 每个网格的大小
+    container.style.width = containerSize + 'px';
+    container.style.height = containerSize + 'px';
     
-    // 预先计算所有位置，避免在循环中重复计算
-    const positions = [];
-    for (let i = 0; i < gridSize; i++) {
-        for (let j = 0; j < gridSize; j++) {
-            positions.push({
-                x: i * cellSize + (Math.random() * cellSize * 0.6),
-                y: j * cellSize + (Math.random() * cellSize * 0.6)
-            });
-        }
-    }
+    // 创建圆圈位置数组
+    const circles = [];
     
-    // 随机打乱位置数组
-    positions.sort(() => Math.random() - 0.5);
-    
-    // 使用前count个位置
+    // 生成所有圆圈
     for (let i = 0; i < count; i++) {
-        const pos = positions[i];
+        // 简化的圆圈位置生成算法
+        let x, y, size, overlapping;
+        let attempts = 0;
+        const maxAttempts = 20; // 最大尝试次数
         
-        // 简化版本使用固定大小，减少计算和渲染负担
-        const size = useSimpleLayout ? 36 : 36 + (Math.random() * 8 - 4);
+        do {
+            size = baseSize + Math.floor(Math.random() * (sizeVariation * 2 + 1)) - sizeVariation;
+            x = Math.floor(Math.random() * (containerSize - size));
+            y = Math.floor(Math.random() * (containerSize - size));
+            
+            // 检查是否与现有圆圈重叠
+            overlapping = false;
+            for (let j = 0; j < circles.length; j++) {
+                const dx = circles[j].x - x;
+                const dy = circles[j].y - y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < minDistance) {
+                    overlapping = true;
+                    break;
+                }
+            }
+            
+            attempts++;
+            // 如果尝试次数过多，放宽要求
+            if (attempts > maxAttempts) {
+                break;
+            }
+        } while (overlapping);
         
-        // 简化版本使用交替颜色，减少随机数生成
-        const color = useSimpleLayout ? 
-            colors[i % colors.length] : 
-            colors[Math.floor(Math.random() * colors.length)];
+        // 创建圆圈元素
+        const circle = document.createElement('div');
+        circle.className = 'circle';
+        circle.style.width = size + 'px';
+        circle.style.height = size + 'px';
+        circle.style.left = x + 'px';
+        circle.style.top = y + 'px';
+        circle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
         
-        // 生成小球HTML - 简化样式属性
-        circles += `<div class="circle" style="position:absolute;left:${pos.x}px;top:${pos.y}px;width:${size}px;height:${size}px;background-color:${color};border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>`;
+        // 添加到数组和容器
+        circles.push({ x, y, size });
+        container.appendChild(circle);
     }
     
-    return circles;
+    fragment.appendChild(container);
+    return fragment;
 }
 
 // 修改genDecomposition函数，返回HTML字符串而不是直接操作DOM
@@ -966,31 +816,27 @@ function genArithmetic() {
 }
 
 function checkAnswer(selected, correct) {
-    if (selected === correct) {
+    const isCorrect = selected === correct;
+    
+    // 更新反馈区域
+    cachedElements.feedback.textContent = isCorrect ? '✓ 正确!' : '✗ 错误!';
+    cachedElements.feedback.className = 'feedback ' + (isCorrect ? 'correct' : 'wrong');
+    
+    // 更新分数
+    if (isCorrect) {
         totalScore++;
-        document.getElementById('feedback').textContent = '太棒了！答对了！';
-        document.getElementById('feedback').className = 'feedback correct';
+        cachedElements.totalScore.textContent = totalScore;
         playSound('correct');
-        
-        // 答对了才增加题目计数和跳转到下一题
-        questionCount++;
-        updateScore();
-        
-        // 清除当前题目的记录，以便生成新题目
-        window._currentQuickCountQuestion = null;
-        
-        setTimeout(renderQuestion, 500);
     } else {
-        document.getElementById('feedback').textContent = '再试一次吧！';
-        document.getElementById('feedback').className = 'feedback incorrect';
         playSound('wrong');
-        
-        // 答错时不跳转，只显示反馈，让用户继续尝试
-        setTimeout(() => {
-            document.getElementById('feedback').textContent = '';
-            document.getElementById('feedback').className = 'feedback';
-        }, 1000);
     }
+    
+    // 短暂延迟后显示下一题
+    setTimeout(() => {
+        cachedElements.feedback.textContent = '';
+        cachedElements.feedback.className = 'feedback';
+        renderQuestion();
+    }, isCorrect ? 500 : 800); // 正确时更短的延迟
 }
 
 function getRandomNumber(min, max) {

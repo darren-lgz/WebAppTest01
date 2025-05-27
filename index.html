@@ -4,62 +4,81 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#f0f9ff">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="format-detection" content="telephone=no">
-    <title>趣味数学 - 幼儿园数学学习</title>
-    <!-- 预加载关键资源 -->
-    <link rel="preload" href="styles.css" as="style">
-    <link rel="preload" href="script.js" as="script">
-    <link rel="preload" href="sounds/correct.mp3" as="audio">
-    <link rel="preload" href="sounds/wrong.mp3" as="audio">
+    <title>趣味数学</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- 添加启动画面样式，减少白屏时间 -->
     <style>
-        .app-loader {
+        /* 内联关键CSS，减少外部资源加载 */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f9ff;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 10px;
+        }
+        h1 {
+            color: #ff6b6b;
+            text-align: center;
+            font-size: 1.8em;
+            margin: 10px 0;
+        }
+        #setupSection {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .game-type-btn {
+            background-color: #f0f0f0;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 20px;
+            font-size: 1em;
+        }
+        .game-type-btn.active {
+            background-color: #4ecdc4;
+            color: white;
+        }
+        #startBtn {
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 1.1em;
+            margin-top: 15px;
+            width: 100%;
+        }
+        .setup-group {
+            margin: 10px 0;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        /* 简单的加载指示器 */
+        #simpleLoader {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
-            background-color: #f0f9ff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            height: 3px;
+            background-color: #4ecdc4;
             z-index: 9999;
-            transition: opacity 0.3s ease;
-        }
-        .loader-content {
-            text-align: center;
-        }
-        .loader-title {
-            color: #ff6b6b;
-            font-size: 2em;
-            margin-bottom: 20px;
-        }
-        .loader-spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(76, 205, 196, 0.3);
-            border-radius: 50%;
-            border-top-color: #4ecdc4;
-            animation: spin 1s ease-in-out infinite;
-            margin: 0 auto;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <!-- 添加启动画面，减少白屏感知 -->
-    <div class="app-loader" id="appLoader">
-        <div class="loader-content">
-            <div class="loader-title">趣味数学</div>
-            <div class="loader-spinner"></div>
-        </div>
-    </div>
+    <!-- 简单的加载指示器 -->
+    <div id="simpleLoader"></div>
 
     <div class="container">
         <header>
@@ -88,17 +107,13 @@
                 </div>
                 <button id="startBtn">开始游戏</button>
             </div>
-            <nav style="display:none;">
-                <button onclick="showSection('quick-count')">一眼识数</button>
-                <button onclick="showSection('decomposition')">数的分解</button>
-            </nav>
         </header>
 
         <main>
             <section id="gameArea" class="game-area" style="display:none;">
                 <div class="game-toolbar">
                     <div class="game-info">
-                        <span class="timer" id="timeLeft">⏱ 120</span>
+                        <span class="timer" id="timeLeft">⏱ 60</span>
                         <span class="score">🏆<span id="totalScore">0</span></span>
                     </div>
                     <div class="game-actions">
@@ -111,19 +126,22 @@
             </section>
         </main>
     </div>
-    <script src="script.js" defer></script>
+    
     <script>
     // 页面加载后初始化
     window.addEventListener('DOMContentLoaded', function() {
+        // 隐藏加载指示器
+        document.getElementById('simpleLoader').style.display = 'none';
+        
         // 绑定游戏类型按钮
         document.querySelectorAll('.game-type-btn').forEach(btn => {
             btn.onclick = function() {
                 document.querySelectorAll('.game-type-btn').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
-                currentGameType = this.dataset.type;
+                window.currentGameType = this.dataset.type;
                 
                 // 处理数的分解游戏相关设置项显示
-                const isDecomposition = currentGameType === 'decomposition';
+                const isDecomposition = window.currentGameType === 'decomposition';
                 document.getElementById('decompRandomGroup').style.display = isDecomposition ? 'block' : 'none';
                 
                 // 如果是数的分解游戏，根据乱序复选框状态决定显示哪些设置项
@@ -140,28 +158,6 @@
         
         // 绑定乱序复选框事件
         document.getElementById('decompRandom').addEventListener('change', updateDecompSettings);
-        
-        // 绑定开始游戏按钮
-        document.getElementById('startBtn').onclick = startGame;
-        // 绑定返回首页和重新开始
-        document.getElementById('backHomeBtn').onclick = showSetupOnly;
-        document.getElementById('restartBtn').onclick = startGame;
-        
-        // 初始检查游戏类型
-        if (currentGameType === 'decomposition') {
-            updateDecompSettings();
-        }
-        
-        // 隐藏加载画面
-        setTimeout(function() {
-            const loader = document.getElementById('appLoader');
-            if (loader) {
-                loader.style.opacity = '0';
-                setTimeout(function() {
-                    loader.style.display = 'none';
-                }, 300);
-            }
-        }, 500);
     });
     
     // 更新数的分解游戏设置项显示
@@ -174,5 +170,8 @@
         document.getElementById('decompValueGroup').style.display = isRandom ? 'none' : 'block';
     }
     </script>
+    
+    <!-- 延迟加载主脚本 -->
+    <script src="script.js"></script>
 </body>
 </html> 
