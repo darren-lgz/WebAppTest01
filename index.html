@@ -15,8 +15,6 @@
                     <div id="gameTypeBtns" class="game-type-btns vertical">
                         <button type="button" class="game-type-btn active" data-type="quick-count">一眼识数</button>
                         <button type="button" class="game-type-btn" data-type="decomposition">数的分解</button>
-                        <button type="button" class="game-type-btn" data-type="composition">数的组合</button>
-                        <button type="button" class="game-type-btn" data-type="arithmetic">加减法</button>
                     </div>
                 </div>
                 <div class="setup-group">
@@ -32,15 +30,13 @@
                     <input type="number" id="decompValue" value="5" min="2" max="100">
                 </div>
                 <div class="setup-group" id="decompRandomGroup" style="display:none;">
-                    <label for="decompRandom"><input type="checkbox" id="decompRandom" checked> 随机目标数（使用最小数~最大数范围）</label>
+                    <label for="decompRandom"><input type="checkbox" id="decompRandom" checked> 随机目标数</label>
                 </div>
                 <button id="startBtn">开始游戏</button>
             </div>
             <nav style="display:none;">
                 <button onclick="showSection('quick-count')">一眼识数</button>
                 <button onclick="showSection('decomposition')">数的分解</button>
-                <button onclick="showSection('composition')">数的组合</button>
-                <button onclick="showSection('arithmetic')">加减法</button>
             </nav>
         </header>
 
